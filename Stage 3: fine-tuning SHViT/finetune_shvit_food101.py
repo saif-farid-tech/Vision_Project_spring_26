@@ -4,8 +4,9 @@ finetune_shvit_food101.py
 Wrapper that fine-tunes SHViT on Food-101 with a single GPU.
 
 Design choices that match the original SHViT paper / engine.py:
-  - Augmentation: RandAugment (rand-m9-mstd0.5-inc1) + RandomErasing (p=0.25)
-                  + Mixup (alpha=0.8) + CutMix (alpha=1.0) + label smoothing 0.1
+  - Augmentation: defined in augmentation.py at the repo root
+    (RandAugment(2, 9) + RandomErasing(p=0.25) train, plain resize+crop val,
+    Mixup(0.8) + CutMix(1.0) + label smoothing 0.1).
   - Forward pass during training runs in full FP32 (matching the commented-out
     autocast in the original engine.py's train_one_epoch).
   - Eval forward pass uses torch.cuda.amp.autocast (matching original evaluate()).
@@ -37,13 +38,11 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
-import torchvision.datasets as tvdatasets
-from timm.data import Mixup, create_transform
-from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
+from timm.loss import SoftTargetCrossEntropy
 from timm.models import create_model
 
-# metrics.py and splits.py live at the repo root.
-# (timm.utils.accuracy is replaced by metrics.top_k_accuracy)
+# metrics.py, splits.py, augmentation.py live at the repo root.
+# (timm.utils.accuracy is replaced by metrics.top_k_accuracy.)
 # Insert both the script's own directory (for Colab flat copies) and its
 # parent (for local runs from within the repo tree).
 _SCRIPT_DIR = Path(__file__).parent
@@ -52,8 +51,9 @@ for _p in [str(_SCRIPT_DIR), str(_REPO_ROOT)]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from metrics import top_k_accuracy   # noqa: E402
-import splits                         # noqa: E402
+from metrics import top_k_accuracy                                                   # noqa: E402
+from augmentation import build_train_transform, build_val_transform, build_mixup_fn  # noqa: E402
+import splits                                                                         # noqa: E402
 
 
 NUM_CLASSES = 101
@@ -97,15 +97,8 @@ def get_args():
     p.add_argument("--save-freq",     default=10, type=int,
                    help="Save a resumable checkpoint every N epochs")
 
-    # Augmentation — same defaults as SHViT paper
-    p.add_argument("--aa",        default="rand-m9-mstd0.5-inc1", type=str,
-                   help="AutoAugment policy (timm format)")
-    p.add_argument("--smoothing", default=0.1,     type=float)
-    p.add_argument("--reprob",    default=0.25,    type=float,
-                   help="Random Erasing probability")
-    p.add_argument("--remode",    default="pixel", type=str)
-    p.add_argument("--mixup",     default=0.8,     type=float)
-    p.add_argument("--cutmix",    default=1.0,     type=float)
+    # Augmentation (RandAugment, RandomErasing, Mixup, CutMix, label smoothing)
+    # is owned by augmentation.py at the repo root — no CLI knobs here.
 
     # Eval-only mode
     p.add_argument("--eval", action="store_true",
@@ -118,31 +111,11 @@ def get_args():
 # Data
 # ---------------------------------------------------------------------------
 
-def build_transform(args, is_train: bool):
-    if is_train:
-        return create_transform(
-            input_size=args.input_size,
-            is_training=True,
-            color_jitter=0.4,
-            auto_augment=args.aa,
-            interpolation="bicubic",
-            re_prob=args.reprob,
-            re_mode=args.remode,
-            re_count=1,
-        )
-    # Val: resize to 256, centre-crop to 224 (timm default for is_training=False)
-    return create_transform(
-        input_size=args.input_size,
-        is_training=False,
-        interpolation="bicubic",
-    )
-
-
 def build_loaders(args):
     train_ds, val_ds = splits.load_split(
         args.data_root, args.split_file,
-        train_transform=build_transform(args, is_train=True),
-        val_transform=build_transform(args, is_train=False),
+        train_transform=build_train_transform(img_size=args.input_size),
+        val_transform=build_val_transform(img_size=args.input_size),
     )
     print(f"Split ({Path(args.split_file).name}): "
           f"{len(train_ds):,} train  {len(val_ds):,} val")
@@ -317,19 +290,10 @@ def main():
     print(f"Trainable parameters: {n_params:,}")
 
     # ---- Loss / Mixup -------------------------------------------------------
-    mixup_active = args.mixup > 0 or args.cutmix > 0
-    mixup_fn = None
-    if mixup_active:
-        mixup_fn = Mixup(
-            mixup_alpha=args.mixup, cutmix_alpha=args.cutmix,
-            prob=1.0, switch_prob=0.5, mode="batch",
-            label_smoothing=args.smoothing, num_classes=NUM_CLASSES,
-        )
-    criterion = (
-        SoftTargetCrossEntropy()
-        if mixup_active
-        else LabelSmoothingCrossEntropy(smoothing=args.smoothing)
-    )
+    # Mixup + CutMix + label smoothing are always active in the SHViT recipe;
+    # SoftTargetCrossEntropy is the matching loss for soft (mixup) targets.
+    mixup_fn  = build_mixup_fn(num_classes=NUM_CLASSES)
+    criterion = SoftTargetCrossEntropy()
 
     # ---- Optimizer / scaler -------------------------------------------------
     optimizer = torch.optim.AdamW(

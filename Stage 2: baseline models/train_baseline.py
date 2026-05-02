@@ -6,6 +6,9 @@ Val set: 10 % holdout from Food101(split='train') using Ahmed's JSON manifests
          (train_val_split_seed*.json).  Food101(split='test') is reserved for
          the Stage 3 final evaluation only.
 
+Augmentation: shared with Stage 3 via augmentation.py at the repo root
+              (RandAugment + RandomErasing for train, Resize+CenterCrop for val).
+
 Usage:
     python train_baseline.py --model resnet50      --data-root data --output-dir checkpoints
     python train_baseline.py --model mobilenet_v2  --data-root data --output-dir checkpoints
@@ -25,13 +28,12 @@ import torch
 import torch.nn as nn
 import torchvision
 from torch.utils.data import DataLoader
-from torchvision import transforms
 from torchvision.models import (
     resnet50, ResNet50_Weights,
     mobilenet_v2, MobileNet_V2_Weights,
 )
 
-# metrics.py and splits.py live at the repo root.
+# metrics.py, splits.py, augmentation.py live at the repo root.
 # Insert both the script's own directory (for Colab flat copies) and its
 # parent (for local runs from within the repo tree).
 _SCRIPT_DIR = Path(__file__).parent
@@ -40,33 +42,19 @@ for _p in [str(_SCRIPT_DIR), str(_REPO_ROOT)]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from metrics import top_k_accuracy   # noqa: E402
-import splits                         # noqa: E402
+from metrics import top_k_accuracy                                   # noqa: E402
+from augmentation import build_train_transform, build_val_transform  # noqa: E402
+import splits                                                        # noqa: E402
 
 
-NUM_CLASSES  = 101
-IMAGENET_MEAN = [0.485, 0.456, 0.406]
-IMAGENET_STD  = [0.229, 0.224, 0.225]
+NUM_CLASSES = 101
 
 
 def build_dataloaders(args):
-    train_tf = transforms.Compose([
-        transforms.RandomResizedCrop(224),
-        transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
-        transforms.ToTensor(),
-        transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
-    ])
-    val_tf = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
-    ])
-
     train_ds, val_ds = splits.load_split(
         args.data_root, args.split_file,
-        train_transform=train_tf, val_transform=val_tf,
+        train_transform=build_train_transform(),
+        val_transform=build_val_transform(),
     )
     print(f"Split ({Path(args.split_file).name}): "
           f"{len(train_ds):,} train  {len(val_ds):,} val")
