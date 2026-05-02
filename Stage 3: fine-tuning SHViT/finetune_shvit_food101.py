@@ -41,7 +41,19 @@ import torchvision.datasets as tvdatasets
 from timm.data import Mixup, create_transform
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 from timm.models import create_model
-from timm.utils import accuracy
+
+# metrics.py and splits.py live at the repo root.
+# (timm.utils.accuracy is replaced by metrics.top_k_accuracy)
+# Insert both the script's own directory (for Colab flat copies) and its
+# parent (for local runs from within the repo tree).
+_SCRIPT_DIR = Path(__file__).parent
+_REPO_ROOT   = _SCRIPT_DIR.parent
+for _p in [str(_SCRIPT_DIR), str(_REPO_ROOT)]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from metrics import top_k_accuracy   # noqa: E402
+import splits                         # noqa: E402
 
 
 NUM_CLASSES = 101
@@ -60,6 +72,8 @@ def get_args():
                    help="ImageNet pretrained checkpoint to start from")
     p.add_argument("--data-root",   type=Path, default=Path("data"))
     p.add_argument("--output-dir",  type=Path, default=Path("checkpoints/shvit_food101"))
+    p.add_argument("--split-file",  default=str(_REPO_ROOT / "train_val_split_seed42.json"),
+                   help="Ahmed's train/val count-manifest JSON")
     p.add_argument("--resume",      type=Path, default=None,
                    help="Resume a previous fine-tuning run from a checkpoint_N.pth")
 
@@ -125,14 +139,13 @@ def build_transform(args, is_train: bool):
 
 
 def build_loaders(args):
-    train_ds = tvdatasets.Food101(
-        root=str(args.data_root), split="train",
-        transform=build_transform(args, is_train=True), download=True,
+    train_ds, val_ds = splits.load_split(
+        args.data_root, args.split_file,
+        train_transform=build_transform(args, is_train=True),
+        val_transform=build_transform(args, is_train=False),
     )
-    val_ds = tvdatasets.Food101(
-        root=str(args.data_root), split="test",
-        transform=build_transform(args, is_train=False), download=True,
-    )
+    print(f"Split ({Path(args.split_file).name}): "
+          f"{len(train_ds):,} train  {len(val_ds):,} val")
     train_loader = torch.utils.data.DataLoader(
         train_ds, batch_size=args.batch_size, shuffle=True,
         num_workers=args.num_workers, pin_memory=True, drop_last=True,
@@ -141,7 +154,6 @@ def build_loaders(args):
         val_ds, batch_size=int(1.5 * args.batch_size), shuffle=False,
         num_workers=args.num_workers, pin_memory=True,
     )
-    print(f"Food-101  train: {len(train_ds):,}  val: {len(val_ds):,}")
     return train_loader, val_loader
 
 
@@ -237,7 +249,8 @@ def evaluate_epoch(model, loader, device):
     """AMP autocast during eval — matching original engine.py's evaluate()."""
     model.eval()
     criterion = torch.nn.CrossEntropyLoss()
-    total_loss, top1_sum, top5_sum, n = 0.0, 0.0, 0.0, 0
+    total_loss, n = 0.0, 0
+    all_outputs, all_targets_list = [], []
 
     for images, targets in loader:
         images  = images.to(device, non_blocking=True)
@@ -245,17 +258,20 @@ def evaluate_epoch(model, loader, device):
 
         with torch.cuda.amp.autocast():
             outputs = model(images)
-            loss = criterion(outputs, targets)
+            loss    = criterion(outputs, targets)
 
-        # timm accuracy() returns values in [0, 100]
-        acc1, acc5 = accuracy(outputs, targets, topk=(1, 5))
         bs = images.size(0)
         total_loss += loss.item() * bs
-        top1_sum   += acc1.item() * bs
-        top5_sum   += acc5.item() * bs
+        all_outputs.append(outputs.cpu())
+        all_targets_list.append(targets.cpu())
         n += bs
 
-    return total_loss / n, top1_sum / n / 100.0, top5_sum / n / 100.0
+    all_outputs = torch.cat(all_outputs, dim=0)
+    all_targets = torch.cat(all_targets_list, dim=0)
+    # top_k_accuracy() from metrics.py returns a percentage (0-100)
+    top1 = top_k_accuracy(all_outputs, all_targets, k=1) / 100.0
+    top5 = top_k_accuracy(all_outputs, all_targets, k=5) / 100.0
+    return total_loss / n, top1, top5
 
 
 # ---------------------------------------------------------------------------
