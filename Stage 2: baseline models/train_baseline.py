@@ -27,6 +27,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 import torchvision
+from timm.loss import SoftTargetCrossEntropy
 from torch.utils.data import DataLoader
 from torchvision.models import (
     resnet50, ResNet50_Weights,
@@ -42,9 +43,9 @@ for _p in [str(_SCRIPT_DIR), str(_REPO_ROOT)]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from metrics import top_k_accuracy                                   # noqa: E402
-from augmentation import build_train_transform, build_val_transform  # noqa: E402
-import splits                                                        # noqa: E402
+from metrics import top_k_accuracy                                                   # noqa: E402
+from augmentation import build_train_transform, build_val_transform, build_mixup_fn  # noqa: E402
+import splits                                                                         # noqa: E402
 
 
 NUM_CLASSES = 101
@@ -83,18 +84,32 @@ def build_model(name: str) -> nn.Module:
     return model
 
 
-def train_one_epoch(model, loader, criterion, optimizer, device):
+def train_one_epoch(model, loader, criterion, optimizer, scaler, device, mixup_fn, clip_grad):
+    """
+    Matches the SHViT recipe in finetune_shvit_food101.py:
+    full-FP32 forward, GradScaler for gradient overflow protection,
+    Mixup+CutMix on (images, targets) before the forward pass,
+    AGC-style gradient norm clip.
+    """
     model.train()
     total_loss, n = 0.0, 0
     for images, targets in loader:
         images  = images.to(device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
 
-        optimizer.zero_grad()
+        if mixup_fn is not None:
+            images, targets = mixup_fn(images, targets)
+
         logits = model(images)
         loss   = criterion(logits, targets)
-        loss.backward()
-        optimizer.step()
+
+        optimizer.zero_grad()
+        scaler.scale(loss).backward()
+        if clip_grad > 0:
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), clip_grad)
+        scaler.step(optimizer)
+        scaler.update()
 
         total_loss += loss.item() * images.size(0)
         n += images.size(0)
@@ -103,14 +118,16 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
 
 @torch.no_grad()
 def evaluate(model, loader, criterion, device):
+    """AMP autocast during eval — matches finetune_shvit_food101.py."""
     model.eval()
     total_loss, n = 0.0, 0
     all_outputs, all_targets_list = [], []
     for images, targets in loader:
         images  = images.to(device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
-        logits  = model(images)
-        loss    = criterion(logits, targets)
+        with torch.cuda.amp.autocast():
+            logits = model(images)
+            loss   = criterion(logits, targets)
         total_loss += loss.item() * images.size(0)
         all_outputs.append(logits.cpu())
         all_targets_list.append(targets.cpu())
@@ -150,14 +167,24 @@ def main():
     train_loader, val_loader = build_dataloaders(args)
     print(f"Train batches: {len(train_loader)}   Val batches: {len(val_loader)}")
 
-    model     = build_model(args.model).to(device)
-    criterion = nn.CrossEntropyLoss()
+    model = build_model(args.model).to(device)
+
+    # Mixup + CutMix + label smoothing (shared with SHViT recipe).
+    # SoftTargetCrossEntropy is the matching loss for soft (mixup) targets;
+    # plain CrossEntropyLoss is kept for val loss tracking, since soft-target
+    # CE doesn't accept int labels.
+    mixup_fn      = build_mixup_fn(num_classes=NUM_CLASSES)
+    criterion     = SoftTargetCrossEntropy()
+    val_criterion = nn.CrossEntropyLoss()
+
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=args.lr, weight_decay=args.weight_decay,
     )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=args.epochs,
     )
+    scaler    = torch.cuda.amp.GradScaler()
+    clip_grad = 0.02  # AGC-style norm clip, matching SHViT
 
     with open(csv_path, "w", newline="") as f:
         csv.writer(f).writerow(
@@ -167,8 +194,10 @@ def main():
     best_top1 = 0.0
     for epoch in range(1, args.epochs + 1):
         t0         = time.perf_counter()
-        train_loss = train_one_epoch(model, train_loader, criterion, optimizer, device)
-        val_loss, val_top1, val_top5 = evaluate(model, val_loader, criterion, device)
+        train_loss = train_one_epoch(
+            model, train_loader, criterion, optimizer, scaler, device, mixup_fn, clip_grad,
+        )
+        val_loss, val_top1, val_top5 = evaluate(model, val_loader, val_criterion, device)
         scheduler.step()
         elapsed = time.perf_counter() - t0
         lr      = optimizer.param_groups[0]["lr"]
