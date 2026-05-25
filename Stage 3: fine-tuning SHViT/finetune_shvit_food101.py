@@ -58,6 +58,16 @@ import splits                                                                   
 
 NUM_CLASSES = 101
 
+# Official SHViT pre-trained ImageNet-1k checkpoint URLs.
+# Source: https://github.com/ysj9909/SHViT/releases/tag/v1.0
+# Only these URLs are accepted — anything else is rejected.
+SHVIT_OFFICIAL_URLS = {
+    "shvit_s1": "https://github.com/ysj9909/SHViT/releases/download/v1.0/shvit_s1.pth",
+    "shvit_s2": "https://github.com/ysj9909/SHViT/releases/download/v1.0/shvit_s2.pth",
+    "shvit_s3": "https://github.com/ysj9909/SHViT/releases/download/v1.0/shvit_s3.pth",
+    "shvit_s4": "https://github.com/ysj9909/SHViT/releases/download/v1.0/shvit_s4.pth",
+}
+
 
 # ---------------------------------------------------------------------------
 # Args
@@ -134,15 +144,75 @@ def build_loaders(args):
 # Model + checkpoint helpers
 # ---------------------------------------------------------------------------
 
-def load_pretrained(model: torch.nn.Module, ckpt_path: Path) -> None:
+def download_shvit_pretrained(model_name: str, dest: Path) -> None:
+    """Download an official SHViT pre-trained checkpoint to `dest`.
+
+    Only URLs in SHVIT_OFFICIAL_URLS are accepted — the script will not fetch
+    anything from any other source.
+    """
+    if model_name not in SHVIT_OFFICIAL_URLS:
+        raise SystemExit(
+            f"[REJECT] '{model_name}' is not a supported SHViT variant. "
+            f"Accepted variants: {sorted(SHVIT_OFFICIAL_URLS)}"
+        )
+    url = SHVIT_OFFICIAL_URLS[model_name]
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading official SHViT pre-trained weights:\n  {url}\n  -> {dest}")
+    torch.hub.download_url_to_file(url, str(dest), progress=True)
+
+
+def verify_shvit_checkpoint(state_dict: dict, model_name: str) -> None:
+    """Reject any checkpoint that is not an official SHViT ImageNet-1k model.
+
+    Checks:
+      1. `head.l.weight` / `head.l.bias` are present — SHViT's classifier wraps
+         a Linear inside a BN_Linear under the attribute name ``l``, which no
+         other timm model uses.
+      2. The classifier head is 1000-way (ImageNet-1k pretrained, not a
+         downstream-task checkpoint).
+      3. State-dict keys live in the SHViT namespace
+         (``patch_embed`` / ``blocks1|2|3`` / ``head`` / ``head_dist``).
+    """
+    head_w = state_dict.get("head.l.weight")
+    head_b = state_dict.get("head.l.bias")
+    if head_w is None or head_b is None:
+        raise SystemExit(
+            f"[REJECT] {model_name}: checkpoint has no SHViT 'head.l.*' classifier "
+            f"keys. Only official SHViT pre-trained weights are accepted."
+        )
+    if head_w.ndim != 2 or head_w.shape[0] != 1000:
+        raise SystemExit(
+            f"[REJECT] {model_name}: classifier head shape is "
+            f"{tuple(head_w.shape)}, expected (1000, D) for an ImageNet-1k "
+            f"SHViT checkpoint. Refusing to load."
+        )
+
+    allowed_prefixes = ("patch_embed", "blocks1", "blocks2", "blocks3",
+                        "head.", "head_dist.")
+    foreign = [k for k in state_dict
+               if not k.startswith(allowed_prefixes)]
+    if foreign:
+        raise SystemExit(
+            f"[REJECT] {model_name}: checkpoint contains keys outside the SHViT "
+            f"namespace (e.g. {foreign[:5]}). Refusing to load — only official "
+            f"SHViT pre-trained weights are accepted."
+        )
+    print(f"[OK] Verified official SHViT pre-trained checkpoint "
+          f"({model_name}, 1000-way ImageNet head, {len(state_dict)} tensors).")
+
+
+def load_pretrained(model: torch.nn.Module, ckpt_path: Path, model_name: str) -> None:
     """
     Load ImageNet weights, dropping head keys whose shape mismatches.
-    Mirrors the --finetune branch in SHViT's main.py exactly.
+    Mirrors the --finetune branch in SHViT's main.py exactly, but first
+    verifies that `ckpt_path` is an authentic SHViT pre-trained checkpoint.
     """
     # weights_only=False: PyTorch 2.6+ default change; SHViT checkpoints carry
     # the original argparse Namespace which is a pickled (non-tensor) object.
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     state_dict = ckpt.get("model", ckpt)
+
+    verify_shvit_checkpoint(state_dict, model_name)
 
     # SHViT classifier: head.l.{weight,bias}  (distillation variant: head_dist.l.*)
     head_keys = [
@@ -283,8 +353,14 @@ def main():
 
     # ---- Model --------------------------------------------------------------
     model = create_model(args.model, pretrained=False, num_classes=NUM_CLASSES)
-    if args.finetune and args.finetune.exists():
-        load_pretrained(model, args.finetune)
+    # When resuming a fine-tune we restore weights below; otherwise we MUST
+    # start from official SHViT ImageNet-1k weights. If the local file is
+    # missing we download it from the SHViT-only URL whitelist — no other
+    # source is accepted.
+    if not args.resume:
+        if not args.finetune.exists():
+            download_shvit_pretrained(args.model, args.finetune)
+        load_pretrained(model, args.finetune, args.model)
     model.to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Trainable parameters: {n_params:,}")
