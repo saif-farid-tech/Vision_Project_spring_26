@@ -1,7 +1,7 @@
 """
 verify_model.py
 Loads SHViT-S4 from a local checkpoint and runs inference on a small
-subset of Flowers102 validation images to confirm the model loads correctly.
+subset of Stanford Cars validation images to confirm the model loads correctly.
 
 Usage:
     python verify_model.py \\
@@ -12,7 +12,7 @@ Usage:
 
 The script prints per-image predictions and a summary timing.
 Top-1 predictions are ImageNet class indices, so expect ~zero accuracy vs.
-Flowers102 labels — the point is just to confirm the model runs without errors.
+Stanford Cars labels — the point is just to confirm the model runs without errors.
 """
 
 import argparse
@@ -47,15 +47,19 @@ def get_transform(img_size: int = 224) -> transforms.Compose:
     ])
 
 
-def collect_images(image_dir: Path, n: int):
-    """Return up to n (path, class_name) pairs from Flowers102's flat jpg/ dir.
-    Class names are not encoded in filenames here, so we just emit "unknown"
-    for the class — verify_model.py only needs the inference path to run."""
+def collect_images(ds_root: Path, n: int):
+    """Return up to n (path, class_name) pairs from Stanford Cars's flat
+    cars_train/ + cars_test/ folders. Class names are not encoded in the
+    image filenames, so we emit "unknown" — verify_model.py only needs the
+    inference path to run."""
     items = []
-    for img_path in sorted(image_dir.glob("*.jpg")):
-        items.append((img_path, "unknown"))
-        if len(items) >= n:
-            return items
+    for split_dir in (ds_root / "cars_train", ds_root / "cars_test"):
+        if not split_dir.exists():
+            continue
+        for img_path in sorted(split_dir.glob("*.jpg")):
+            items.append((img_path, "unknown"))
+            if len(items) >= n:
+                return items
     return items
 
 
@@ -66,8 +70,8 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, default=Path("weights/shvit_s4.pth"),
                         help="Path to shvit_s4.pth")
     parser.add_argument("--data-root", type=Path, default=Path("data"),
-                        help="Flowers102 parent dir; expects "
-                             "<data-root>/oxford_flowers/jpg/")
+                        help="Stanford Cars parent dir; expects "
+                             "<data-root>/stanford_cars/jpg/")
     parser.add_argument("--num-images", type=int, default=50,
                         help="Number of images to run inference on")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -116,15 +120,15 @@ def main() -> None:
     # ------------------------------------------------------------------ #
     # 4. Collect images (auto-prepare dataset if missing)
     # ------------------------------------------------------------------ #
-    image_dir = args.data_root / "oxford_flowers" / "jpg"
-    if not image_dir.exists():
-        print(f"[info] {image_dir} not found, downloading Flowers102 first ...")
+    ds_root = args.data_root / "stanford_cars"
+    if not (ds_root / "cars_train").exists():
+        print(f"[info] {ds_root}/cars_train not found, preparing Stanford Cars first ...")
         import splits  # noqa: E402
         splits.ensure_prepared(args.data_root)
 
-    items = collect_images(image_dir, args.num_images)
+    items = collect_images(ds_root, args.num_images)
     if not items:
-        sys.exit(f"[ERROR] No .jpg images found under {image_dir}")
+        sys.exit(f"[ERROR] No .jpg images found under {ds_root}/cars_*")
 
     print(f"\nRunning inference on {len(items)} images (device={args.device}) ...")
     transform = get_transform()
@@ -155,7 +159,7 @@ def main() -> None:
           f"({elapsed / len(results) * 1000:.1f} ms/image)")
     print("\n[OK] Model loaded and ran inference without errors.")
     print("Note: top-1 predictions are ImageNet class indices — accuracy vs.")
-    print("Flowers102 labels is expected to be low without fine-tuning.")
+    print("Stanford Cars labels is expected to be low without fine-tuning.")
 
 
 if __name__ == "__main__":

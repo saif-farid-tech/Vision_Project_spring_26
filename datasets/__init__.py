@@ -2,7 +2,7 @@
 
 Source: https://github.com/gaopengcuhk/Tip-Adapter/tree/main/datasets
 
-Vendored locally so the Flowers102 experiment can use the same Datum /
+Vendored locally so the StanfordCars experiment can use the same Datum /
 DatasetBase / DatasetWrapper abstractions and the CoOp-style split JSON.
 """
 
@@ -16,7 +16,7 @@ from .utils import (
     write_json,
     listdir_nohidden,
 )
-from .oxford_flowers import OxfordFlowers
+from .stanford_cars import StanfordCars
 from .oxford_pets import OxfordPets
 
 __all__ = [
@@ -28,6 +28,6 @@ __all__ = [
     "read_json",
     "write_json",
     "listdir_nohidden",
-    "OxfordFlowers",
+    "StanfordCars",
     "OxfordPets",
 ]

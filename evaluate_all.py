@@ -1,8 +1,8 @@
 """
 evaluate_all.py
-Run inference and benchmarks for the 6 trained Flowers102 classifiers
-(ResNet-50, MobileNetV2, SHViT-S1..S4) on the held-out Flowers102 test split
-(from the Tip-Adapter split_zhou_OxfordFlowers.json).
+Run inference and benchmarks for the 6 trained Stanford Cars classifiers
+(ResNet-50, MobileNetV2, SHViT-S1..S4) on the held-out Stanford Cars test split
+(from the Tip-Adapter split_zhou_StanfordCars.json).
 
 Per model:
     - Top-1 / Top-5 accuracy
@@ -17,10 +17,10 @@ Outputs:
 
 Usage:
     python evaluate_all.py \\
-        --checkpoints-dir CV_Research_Paper_Flowers102 \\
+        --checkpoints-dir CV_Research_Paper_StanfordCars \\
         --shvit-dir       SHViT \\
         --data-root       data \\
-        --output-dir      CV_Research_Paper_Flowers102/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/results
+        --output-dir      CV_Research_Paper_StanfordCars/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/results
 """
 
 import argparse
@@ -44,7 +44,7 @@ from metrics import evaluate_model                                          # no
 import splits                                                               # noqa: E402
 
 
-NUM_CLASSES = 102  # Flowers102 under the Tip-Adapter / CoOp split
+NUM_CLASSES = 196  # Stanford Cars under the Tip-Adapter / CoOp split
 
 # (model name, subdir under checkpoints-dir, checkpoint format)
 MODELS = [
@@ -197,11 +197,11 @@ def write_latex_table(rows, path: Path) -> None:
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--checkpoints-dir", type=Path,
-                   default=Path("CV_Research_Paper_Flowers102"))
+                   default=Path("CV_Research_Paper_StanfordCars"))
     p.add_argument("--shvit-dir",       type=Path, default=_REPO_ROOT / "SHViT")
     p.add_argument("--data-root",       type=Path, default=Path("data"))
     p.add_argument("--output-dir",      type=Path,
-                   default=Path("CV_Research_Paper_Flowers102/Stage 4: Benchmarking and Demo/analysis/results"))
+                   default=Path("CV_Research_Paper_StanfordCars/Stage 4: Benchmarking and Demo/analysis/results"))
     p.add_argument("--batch-size",      type=int,  default=64)
     p.add_argument("--num-workers",     type=int,  default=2)
     args = p.parse_args()
@@ -219,7 +219,7 @@ def main():
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    # ---- Test set (Flowers102 Tip-Adapter split) -----------------------
+    # ---- Test set (Stanford Cars Tip-Adapter split) -----------------------
     splits.ensure_prepared(args.data_root)
     test_ds = splits.load_test(args.data_root, transform=build_val_transform())
     class_names = test_ds.classes

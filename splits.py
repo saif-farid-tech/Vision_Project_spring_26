@@ -1,9 +1,9 @@
-"""splits.py — train/val/test loader for Flowers102 using the Tip-Adapter
-style split JSON (`split_zhou_OxfordFlowers.json`).
+"""splits.py — train/val/test loader for Stanford Cars using the Tip-Adapter
+style split JSON (`split_zhou_StanfordCars.json`).
 
 The CoOp / Tip-Adapter split bakes the train / val / test partition into a
 single JSON, so we don't need per-class count manifests. This module exposes
-the same API as the Flowers102 variant:
+the same API as the previous dataset variants:
 
     train_ds, val_ds = splits.load_split(
         data_root="data",
@@ -20,7 +20,7 @@ from typing import Optional, Tuple
 
 from torch.utils.data import Dataset
 
-from datasets.oxford_flowers import OxfordFlowers
+from datasets.stanford_cars import StanfordCars
 from datasets.utils import DatasetWrapper
 
 
@@ -77,10 +77,10 @@ def _build(
     input_size: int,
     num_shots: int,
 ) -> Tuple[_TipDataset, _TipDataset, _TipDataset, list]:
-    """Construct the underlying Tip-Adapter OxfordFlowers instance and wrap
+    """Construct the underlying Tip-Adapter StanfordCars instance and wrap
     each split. Returned tuple: (train_full_or_fewshot, val, test, classnames).
     """
-    ds = OxfordFlowers(root=str(data_root), num_shots=num_shots)
+    ds = StanfordCars(root=str(data_root), num_shots=num_shots)
     train_source = ds.train_x if num_shots > 0 else ds.train_full
 
     train_ds = _TipDataset(
@@ -106,7 +106,7 @@ def load_split(
     num_shots: int = -1,
     split_json: Optional[str] = None,  # ignored — kept for API compat
 ) -> Tuple[_TipDataset, _TipDataset]:
-    """Return (train_ds, val_ds) for Flowers102 using the Tip-Adapter split."""
+    """Return (train_ds, val_ds) for Stanford Cars using the Tip-Adapter split."""
     train_ds, val_ds, _test_ds, _ = _build(
         data_root, train_transform, val_transform, val_transform,
         input_size=input_size, num_shots=num_shots,
@@ -145,6 +145,6 @@ def load_all(
 
 
 def ensure_prepared(data_root, seed: int = 1) -> Path:
-    """Trigger Flowers102 download / split generation if needed and return
+    """Trigger Stanford Cars download / split generation if needed and return
     the dataset root. Safe to call from any script."""
-    return OxfordFlowers.auto_prepare(data_root, seed=seed)
+    return StanfordCars.auto_prepare(data_root, seed=seed)
