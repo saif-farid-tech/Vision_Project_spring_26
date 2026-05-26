@@ -1,15 +1,14 @@
 """
 demo.py
-Single-image inference with SHViT-S4 fine-tuned on Food-101.
+Single-image inference with SHViT-S4 fine-tuned on Caltech-101.
 
 Loads the checkpoint, preprocesses the image with the same val transform
-used in training (Resize 256 -> CenterCrop 224 -> ImageNet normalize),
-prints top-5 predictions, and saves the image with the top prediction
-overlaid.
+used in training (resize + center-crop + CLIP normalize), prints top-5
+predictions, and saves the image with the top prediction overlaid.
 
 Usage:
-    python demo.py --image food.jpg \\
-        --checkpoint "Stage 3: fine-tuning SHViT/shvit_s4/best.pth" \\
+    python demo.py --image sample.jpg \\
+        --checkpoint "CV_Research_Paper_Caltech101/Stage 3: fine-tuning SHViT/shvit_s4/best.pth" \\
         --shvit-dir  SHViT \\
         --data-root  data
 """
@@ -22,17 +21,17 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from torchvision.datasets import Food101
 
 
-_REPO_ROOT = Path(__file__).parent
+_REPO_ROOT = Path(__file__).resolve().parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from augmentation import build_val_transform  # noqa: E402
+import splits  # noqa: E402
 
 
-NUM_CLASSES = 101
+NUM_CLASSES = 100  # Caltech-101 under the Tip-Adapter / CoOp split
 
 
 def load_shvit_s4(shvit_dir: Path, checkpoint: Path, device):
@@ -57,8 +56,9 @@ def main():
     p.add_argument("--checkpoint", type=Path, required=True)
     p.add_argument("--shvit-dir",  type=Path, required=True)
     p.add_argument("--data-root",  type=Path, required=True,
-                   help="Food-101 root (used only to fetch the 101 class names)")
-    p.add_argument("--output",     type=Path, default=Path("demo_output.png"))
+                   help="Caltech-101 parent dir (used to fetch the class names)")
+    p.add_argument("--output",     type=Path,
+                   default=Path("CV_Research_Paper_Caltech101/Stage 4: Benchmarking and Demo/analysis/demo_output/demo_output.png"))
     p.add_argument("--top-k",      type=int,  default=5)
     args = p.parse_args()
 
@@ -66,9 +66,9 @@ def main():
     print(f"Device: {device}")
 
     # ---- Class names ----------------------------------------------------
-    class_names = list(
-        Food101(root=str(args.data_root), split="test", download=True).classes
-    )
+    splits.ensure_prepared(args.data_root)
+    test_ds = splits.load_test(args.data_root, transform=build_val_transform())
+    class_names = list(test_ds.classes)
 
     # ---- Image + preprocessing -----------------------------------------
     if not args.image.exists():
@@ -83,11 +83,11 @@ def main():
     # ---- Inference -----------------------------------------------------
     with torch.no_grad():
         logits = model(x)
-        probs  = F.softmax(logits, dim=1)[0].cpu()
+        probs = F.softmax(logits, dim=1)[0].cpu()
 
     top_probs, top_idx = probs.topk(args.top_k)
     top_probs = top_probs.tolist()
-    top_idx   = top_idx.tolist()
+    top_idx = top_idx.tolist()
 
     print(f"\nTop-{args.top_k} predictions for {args.image.name}:")
     for rank, (prob, idx) in enumerate(zip(top_probs, top_idx), 1):
@@ -95,7 +95,9 @@ def main():
 
     # ---- Overlay + save ------------------------------------------------
     top_label = class_names[top_idx[0]].replace("_", " ")
-    top_conf  = top_probs[0] * 100.0
+    top_conf = top_probs[0] * 100.0
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
 
     fig, ax = plt.subplots(figsize=(7, 7))
     ax.imshow(img_pil)

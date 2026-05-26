@@ -1,9 +1,6 @@
-```
-Best val accuracy per model:
-model           top-1    top-5  epoch
-shvit_s1       74.51%   92.24%     28
-shvit_s2       77.58%   93.14%     29
-shvit_s3       80.16%   94.56%     28
-shvit_s4       80.73%   94.63%     28
-```
-<img width="1920" height="540" alt="training_curves_all" src="https://github.com/user-attachments/assets/cacbcb14-9a42-46c7-a2b1-ee3d57358f9e" />
+SHViT (S1..S4) fine-tuned on Caltech-101 from ImageNet-pretrained checkpoints.
+
+Run the Stage 3 notebook (or `finetune_shvit_caltech101.py`) once per variant
+to fill in the per-model results — outputs (`training_log.csv`, `best.pth`,
+`checkpoint_*.pth`) are written under
+`CV_Research_Paper_Caltech101/Stage 3: fine-tuning SHViT/<shvit_variant>/`.

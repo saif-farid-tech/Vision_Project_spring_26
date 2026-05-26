@@ -1,9 +1,17 @@
 # Dataset
 data/
+caltech101_data/
+caltech101_local/
 
 # Model checkpoints
 checkpoints/
 weights/
+
+# Local copy of CV_Research_Paper_Caltech101 outputs.
+# Large artifacts (checkpoints, *.pth) are excluded from git; commit
+# selected analysis outputs (figures, results.json, etc.) explicitly.
+CV_Research_Paper_Caltech101/**/best.pth
+CV_Research_Paper_Caltech101/**/checkpoint_*.pth
 
 # Python
 __pycache__/

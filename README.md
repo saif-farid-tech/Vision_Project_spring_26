@@ -1,114 +1,144 @@
-# Food Classification with SHViT
+# Caltech-101 Classification with SHViT
 
 COE-486 Computer Vision — AUS Spring 2026.
-Fine-tuning SHViT (Single-Head Vision Transformer, CVPR 2024) on Food-101 and comparing it against ResNet-50 and MobileNetV2 baselines.
+Caltech-101 variant of the SHViT vs. baselines experiment. Data preprocessing
+follows the [Tip-Adapter](https://github.com/gaopengcuhk/Tip-Adapter) project
+(`datasets/utils.py`): a CoOp-style train/val/test JSON split, CLIP-style
+normalization, and bicubic resizing.
+
+This branch reproduces the same pipeline as the original Food-101 experiment,
+but using Caltech-101 (100 classes under the CoOp / Tip-Adapter convention,
+excluding `BACKGROUND_Google` and `Faces_easy`). Every notebook writes its
+outputs under the root directory **`CV_Research_Paper_Caltech101/`** so the
+final artifacts mirror the stage layout one-to-one.
 
 ---
 
 ## Project description
 
-This project investigates whether SHViT — a lightweight transformer designed for mobile and edge inference — can match the accuracy of established CNN baselines (ResNet-50, MobileNetV2) on the 101-class Food-101 fine-grained food recognition benchmark, while remaining cheap enough to run interactively. We fine-tune all four SHViT variants (S1–S4) from ImageNet-pretrained checkpoints using the paper's training recipe (cosine LR with warmup, RandAugment, RandomErasing, Mixup/CutMix, label smoothing, and gradient clipping), train both CNN baselines under the exact same data split and augmentation pipeline so the comparison is apples-to-apples, and benchmark every model end-to-end on accuracy, parameter count, GFLOPs, GPU throughput, and CPU latency.
+We fine-tune all four SHViT variants (S1–S4) on Caltech-101 from
+ImageNet-pretrained checkpoints using the paper's training recipe (cosine
+LR with warmup, RandAugment, RandomErasing, Mixup / CutMix, label smoothing,
+AGC-style gradient clipping). We train ResNet-50 and MobileNetV2 baselines
+under the exact same data split and augmentation pipeline, and benchmark
+every model end-to-end on top-1 / top-5 accuracy, parameter count, GFLOPs,
+GPU throughput, and CPU latency.
 
-## What we achieved
+Data preprocessing details:
 
-We trained and benchmarked all six models on a shared 90/10 train/val split (seed 42) and evaluated on the official Food-101 test set, finishing with ResNet-50 at 89.74% top-1, SHViT-S4 at 85.67%, MobileNetV2 at 85.20%, SHViT-S3 at 84.97%, SHViT-S2 at 82.40%, and SHViT-S1 at 80.04% — placing SHViT-S4 within ~4 points of ResNet-50 while using roughly 1/5 the GFLOPs (0.79 vs. 4.11) and beating ResNet-50 on GPU throughput. We additionally produced a full reproducibility package: deterministic split manifests for three seeds, per-epoch training logs and best checkpoints for every model, a unified evaluation script that emits JSON results plus Markdown/LaTeX summary tables, headline figures (training curves, train-loss curves, accuracy bars, speed-vs-accuracy scatter), an error analysis of SHViT-S4's worst classes and most-confused pairs, and a single-image demo that runs SHViT-S4 inference end-to-end.
-
----
-
-## Repo files
-
-**Root files**
-- `README.md` — this document; orients a new reader to the repo layout, the project goal, and the headline results.
-- `.gitignore` — keeps the downloaded Food-101 dataset, local checkpoint caches, and Python/Colab build artifacts out of version control.
-- `augmentation.py` — defines the training and validation transforms (RandAugment + RandomErasing) and the Mixup/CutMix function used by both baselines and SHViT.
-- `metrics.py` — provides top-1/top-5 accuracy, per-class accuracy, confusion matrix, and precision/recall/F1 used to evaluate every model.
-- `splits.py` — converts the count-manifest JSONs into deterministic train/val `torch.Subset` pairs so every model is evaluated on the same held-out images.
-- `train_val_split_seed42.json` — the primary 90/10 train/val split (seed 42) used in all training runs.
-- `train_val_split_seed123.json` — alternative split with seed 123 for reproducibility checks.
-- `train_val_split_seed456.json` — alternative split with seed 456 for reproducibility checks.
-- `eda.py` — generates the report's exploratory data analysis (sample grid, image-size histograms, class-distribution bars, summary text) for the Food-101 dataset.
-- `evaluate_all.py` — runs inference and benchmarks (params, GFLOPs, GPU throughput, CPU latency, top-1/top-5, confusion matrix) for all six trained models and writes per-model JSON plus Markdown/LaTeX summary tables.
-- `make_figures.py` — builds the headline figures (validation-accuracy curves, train-loss curves, accuracy bar chart, speed-vs-accuracy scatter) from the training logs and `evaluate_all.py` outputs.
-- `error_analysis.py` — drills into SHViT-S4's `results.json` to produce the worst-classes bar chart, top-20 confusion heatmap, misclassified-image grid, and a summary of best/worst classes and most-confused pairs.
-- `demo.py` — runs single-image inference with the fine-tuned SHViT-S4 checkpoint, prints top-5 predictions, and saves the input image with the predicted label overlaid.
-
-**Stage 1 — Testing the SHViT model** (`Stage 1: testing the SHViT model/`)
-- `setup_shvit.sh` — clones the SHViT repo and installs its dependencies in one command for local setup.
-- `prepare_food101.py` — downloads Food-101 and arranges it into the folder structure expected by the training scripts.
-- `verify_model.py` — loads the SHViT-S4 ImageNet checkpoint and runs it on a handful of Food-101 images to confirm the model imports and runs without errors.
-- `SHViT_Food101_Colab.ipynb` — Colab notebook that reproduces Stage 1 end-to-end on a free T4 GPU.
-
-**Stage 2 — Baseline models** (`Stage 2: baseline models/`)
-- `train_baseline.py` — fine-tunes ResNet-50 or MobileNetV2 on Food-101 using the shared split and augmentation modules.
-- `Baselines_Food101_Colab.ipynb` — Colab notebook that runs both baseline models and plots the training curves.
-- `README.md` — short note recording the best validation top-1 reached by each baseline.
-- `resnet50/best.pth` — saved checkpoint of the best ResNet-50 weights (val top-1 = 85.70%).
-- `resnet50/training_log.csv` — per-epoch loss and accuracy log from the completed ResNet-50 training run.
-- `resnet50/README.md` — note describing the ResNet-50 checkpoint and its best validation top-1.
-- `mobilenet_v2/best.pth` — saved checkpoint of the best MobileNetV2 weights (val top-1 = 80.82%).
-- `mobilenet_v2/training_log.csv` — per-epoch loss and accuracy log from the completed MobileNetV2 training run.
-- `mobilenet_v2/README.md` — note describing the MobileNetV2 checkpoint and its best validation top-1.
-
-**Stage 3 — Fine-tuning SHViT** (`Stage 3: fine-tuning SHViT/`)
-- `finetune_shvit_food101.py` — fine-tunes any SHViT variant (S1–S4) on Food-101 with the paper's recipe (cosine LR, warmup, Mixup, gradient clipping) using the shared split and augmentation modules.
-- `SHViT_Finetune_Colab.ipynb` — Colab notebook that runs the full 30-epoch SHViT fine-tuning and plots training curves.
-- `README.md` — table of best validation top-1/top-5 per SHViT variant alongside a training-curves figure.
-- `shvit_s1/best.pth` — best SHViT-S1 checkpoint (val top-1 = 74.51%).
-- `shvit_s1/training_log.csv` — per-epoch SHViT-S1 training log.
-- `shvit_s1/README.md` — note recording SHViT-S1's evaluation top-1/top-5 and a Drive link to intermediate checkpoints.
-- `shvit_s2/best.pth` — best SHViT-S2 checkpoint (val top-1 = 77.58%).
-- `shvit_s2/training_log.csv` — per-epoch SHViT-S2 training log.
-- `shvit_s2/README.md` — note recording SHViT-S2's evaluation top-1/top-5 and a Drive link to intermediate checkpoints.
-- `shvit_s3/best.pth` — best SHViT-S3 checkpoint (val top-1 = 80.16%).
-- `shvit_s3/training_log.csv` — per-epoch SHViT-S3 training log.
-- `shvit_s3/README.md` — note recording SHViT-S3's evaluation top-1/top-5 and a Drive link to intermediate checkpoints.
-- `shvit_s4/best.pth` — best SHViT-S4 checkpoint (val top-1 = 80.73%), used for the demo and error analysis.
-- `shvit_s4/training_log.csv` — per-epoch SHViT-S4 training log.
-- `shvit_s4/README.md` — note recording SHViT-S4's evaluation top-1/top-5 and a Drive link to intermediate checkpoints.
-
-**Stage 4 — Benchmarking and Demo** (`Stage 4: Benchmarking and Demo/`)
-- `Analysis_Pipeline_Colab.ipynb` — Colab notebook that ties the analysis pipeline together: runs `evaluate_all.py`, `make_figures.py`, `error_analysis.py`, and the SHViT-S4 demo.
-- `README.md` — pointer note explaining that this stage is where all six models are benchmarked and SHViT-S4 is demoed.
-- `analysis/demo_output/demo_output.png` — sample output of `demo.py` (a Food-101 image overlaid with SHViT-S4's top prediction and confidence).
-- `analysis/eda_outputs/eda_samples.png` — 5×5 grid of random Food-101 training images with class labels.
-- `analysis/eda_outputs/eda_image_sizes.png` — width/height histograms over a random sample of training images.
-- `analysis/eda_outputs/eda_class_distribution.png` — stacked bar chart of per-class image counts across train and test splits.
-- `analysis/eda_outputs/eda_summary.txt` — text summary of dataset statistics (totals, per-class counts, image-size stats, class list).
-- `analysis/error_analysis_outputs/confusion_top20.png` — row-normalized confusion heatmap restricted to SHViT-S4's 20 worst classes.
-- `analysis/error_analysis_outputs/worst_15_categories.png` — horizontal bar chart of SHViT-S4's 15 lowest per-class accuracies.
-- `analysis/error_analysis_outputs/misclassified_grid.png` — 4×4 grid of randomly sampled SHViT-S4 misclassifications with true/predicted labels and confidences.
-- `analysis/error_analysis_outputs/error_analysis_summary.txt` — text summary listing SHViT-S4's worst-10 and best-10 classes plus its top-10 most confused class pairs.
-- `analysis/figures/fig_training_curves.png` — validation top-1 accuracy over epochs for all six models.
-- `analysis/figures/fig_train_loss.png` — training loss over epochs for all six models.
-- `analysis/figures/fig_accuracy_bars.png` — sorted bar chart of test top-1 accuracy across all six models.
-- `analysis/figures/fig_speed_vs_accuracy.png` — scatter of GPU throughput against test top-1 accuracy for all six models.
-- `analysis/results/results_table.md` — Markdown summary table (params, GFLOPs, top-1/top-5, GPU throughput, CPU latency) for all six models.
-- `analysis/results/results_table.tex` — LaTeX version of the same summary table for the report.
-- `analysis/results/<model>/results.json` — per-model evaluation dump (top-1/top-5, per-class accuracy, full confusion matrix, all preds/targets, params, GFLOPs, GPU throughput, CPU latency) for `resnet50`, `mobilenet_v2`, and `shvit_s1`–`shvit_s4`.
+- Split file: `<data-root>/caltech-101/split_zhou_Caltech101.json`
+  (downloaded via `gdown` when available, otherwise generated locally as a
+  deterministic per-class 50% / 20% / 30% train/val/test split — see
+  `datasets/caltech101.py`).
+- Image directory: `<data-root>/caltech-101/101_ObjectCategories/<class>/…`
+  (the `torchvision.datasets.Caltech101` download is re-shaped into this
+  Tip-Adapter style layout automatically).
+- Normalization: CLIP statistics
+  `mean=(0.48145466, 0.4578275, 0.40821073)`,
+  `std=(0.26862954, 0.26130258, 0.27577711)`.
+- Wrapping: `datasets/utils.py::DatasetWrapper` (bicubic resize, optional
+  k-shot replication, optional return-of-img0 channel).
 
 ---
 
-## Repo directories
+## Output root
 
-- `Stage 1: testing the SHViT model/` — scripts and a Colab notebook that bring up the SHViT codebase, prepare Food-101, and sanity-check the ImageNet-pretrained SHViT-S4 model before any fine-tuning.
-- `Stage 2: baseline models/` — training script, Colab notebook, checkpoints, and per-epoch logs for the ResNet-50 and MobileNetV2 baselines used to compare against SHViT.
-- `Stage 2: baseline models/resnet50/` — saved best checkpoint, training log, and short note for the fine-tuned ResNet-50 baseline.
-- `Stage 2: baseline models/mobilenet_v2/` — saved best checkpoint, training log, and short note for the fine-tuned MobileNetV2 baseline.
-- `Stage 3: fine-tuning SHViT/` — fine-tuning script, Colab notebook, and per-variant checkpoints/logs for all four SHViT variants on Food-101.
-- `Stage 3: fine-tuning SHViT/shvit_s1/` — best checkpoint, training log, and note for the fine-tuned SHViT-S1 model.
-- `Stage 3: fine-tuning SHViT/shvit_s2/` — best checkpoint, training log, and note for the fine-tuned SHViT-S2 model.
-- `Stage 3: fine-tuning SHViT/shvit_s3/` — best checkpoint, training log, and note for the fine-tuned SHViT-S3 model.
-- `Stage 3: fine-tuning SHViT/shvit_s4/` — best checkpoint, training log, and note for the fine-tuned SHViT-S4 model used in the demo and error analysis.
-- `Stage 4: Benchmarking and Demo/` — Colab notebook and analysis artifacts that benchmark all six trained models and demo SHViT-S4.
-- `Stage 4: Benchmarking and Demo/analysis/` — home of every generated artifact in Stage 4 (EDA, error analysis, figures, demo image, per-model results).
-- `Stage 4: Benchmarking and Demo/analysis/demo_output/` — saved output image from `demo.py` showing a Food-101 photo with SHViT-S4's top prediction overlaid.
-- `Stage 4: Benchmarking and Demo/analysis/eda_outputs/` — exploratory data analysis figures and summary text generated by `eda.py`.
-- `Stage 4: Benchmarking and Demo/analysis/error_analysis_outputs/` — confusion heatmaps, worst-classes chart, misclassified-image grid, and summary text generated by `error_analysis.py` for SHViT-S4.
-- `Stage 4: Benchmarking and Demo/analysis/figures/` — headline figures (training curves, train-loss, accuracy bars, speed-vs-accuracy scatter) produced by `make_figures.py`.
-- `Stage 4: Benchmarking and Demo/analysis/results/` — Markdown/LaTeX summary tables and per-model `results.json` dumps produced by `evaluate_all.py`.
-- `Stage 4: Benchmarking and Demo/analysis/results/resnet50/` — `results.json` from `evaluate_all.py` for ResNet-50.
-- `Stage 4: Benchmarking and Demo/analysis/results/mobilenet_v2/` — `results.json` from `evaluate_all.py` for MobileNetV2.
-- `Stage 4: Benchmarking and Demo/analysis/results/shvit_s1/` — `results.json` from `evaluate_all.py` for SHViT-S1.
-- `Stage 4: Benchmarking and Demo/analysis/results/shvit_s2/` — `results.json` from `evaluate_all.py` for SHViT-S2.
-- `Stage 4: Benchmarking and Demo/analysis/results/shvit_s3/` — `results.json` from `evaluate_all.py` for SHViT-S3.
-- `Stage 4: Benchmarking and Demo/analysis/results/shvit_s4/` — `results.json` from `evaluate_all.py` for SHViT-S4.
+**Every script and notebook in this branch writes its results under
+`CV_Research_Paper_Caltech101/`** so the final layout looks like:
+
+```
+CV_Research_Paper_Caltech101/
+├── Stage 2: baseline models/
+│   ├── resnet50/{training_log.csv, best.pth}
+│   └── mobilenet_v2/{training_log.csv, best.pth}
+├── Stage 3: fine-tuning SHViT/
+│   ├── shvit_s1/{training_log.csv, best.pth, checkpoint_*.pth}
+│   ├── shvit_s2/…
+│   ├── shvit_s3/…
+│   └── shvit_s4/…
+└── Stage 4: Benchmarking and Demo/
+    └── analysis/
+        ├── eda_outputs/             (eda.py)
+        ├── results/                 (evaluate_all.py)
+        ├── figures/                 (make_figures.py)
+        ├── error_analysis_outputs/  (error_analysis.py)
+        └── demo_output/             (demo.py)
+```
+
+---
+
+## Repo layout
+
+**Root**
+- `README.md` — this file.
+- `prepare_caltech101.py` — downloads Caltech-101 and prepares the Tip-Adapter
+  style split JSON (gdown-first, deterministic-fallback).
+- `splits.py` — loads the Tip-Adapter Caltech-101 split into a
+  torchvision-compatible Dataset (`load_split`, `load_test`, `load_all`).
+- `augmentation.py` — training / validation transforms (CLIP normalization,
+  bicubic resize, RandAugment + RandomErasing for train, Mixup helper).
+- `metrics.py` — top-1 / top-5 accuracy, per-class accuracy, confusion matrix,
+  precision / recall / F1, end-to-end `evaluate_model`.
+- `eda.py` — Caltech-101 EDA visualizations (sample grid, image sizes,
+  class distribution, summary text).
+- `evaluate_all.py` — benchmarks all 6 trained models on the test split.
+- `make_figures.py` — generates the headline figures from training logs +
+  per-model `results.json`.
+- `error_analysis.py` — detailed error analysis for SHViT-S4.
+- `demo.py` — single-image inference with SHViT-S4 + label overlay.
+
+**`datasets/`** — vendored from
+[Tip-Adapter](https://github.com/gaopengcuhk/Tip-Adapter/tree/main/datasets).
+Contains the `Datum`, `DatasetBase`, `DatasetWrapper`, `Caltech101` and
+`OxfordPets` helpers plus the `auto_prepare` extension used by
+`prepare_caltech101.py`.
+
+**Stage 1 — `Stage 1: testing the SHViT model/`**
+- `setup_shvit.sh` — clones SHViT and installs its dependencies.
+- `prepare_caltech101.py` — thin wrapper that calls the root prepare script.
+- `verify_model.py` — sanity-check SHViT-S4 on a handful of Caltech-101 images.
+- `SHViT_Caltech101_Colab.ipynb` — Colab notebook for the stage.
+
+**Stage 2 — `Stage 2: baseline models/`**
+- `train_baseline.py` — fine-tunes ResNet-50 or MobileNetV2 on Caltech-101.
+- `Baselines_Caltech101_Colab.ipynb` — Colab notebook for the stage.
+
+**Stage 3 — `Stage 3: fine-tuning SHViT/`**
+- `finetune_shvit_caltech101.py` — fine-tunes any SHViT variant (S1..S4)
+  on Caltech-101 with the paper's recipe.
+- `SHViT_Finetune_Caltech101_Colab.ipynb` — Colab notebook for the stage.
+
+**Stage 4 — `Stage 4: Benchmarking and Demo/`**
+- `Analysis_Pipeline_Caltech101_Colab.ipynb` — ties `evaluate_all.py`,
+  `make_figures.py`, `error_analysis.py`, and `demo.py` together.
+
+---
+
+## Quick local run
+
+```bash
+# 1. Prepare data
+python prepare_caltech101.py --root data
+
+# 2. Train baselines
+python "Stage 2: baseline models/train_baseline.py" \
+    --model resnet50 --data-root data \
+    --output-dir "CV_Research_Paper_Caltech101/Stage 2: baseline models"
+python "Stage 2: baseline models/train_baseline.py" \
+    --model mobilenet_v2 --data-root data \
+    --output-dir "CV_Research_Paper_Caltech101/Stage 2: baseline models"
+
+# 3. Fine-tune SHViT variants (S1..S4) — requires SHViT repo + weights
+python "Stage 3: fine-tuning SHViT/finetune_shvit_caltech101.py" \
+    --model shvit_s4 --shvit-dir SHViT --finetune weights/shvit_s4.pth \
+    --data-root data \
+    --output-dir "CV_Research_Paper_Caltech101/Stage 3: fine-tuning SHViT/shvit_s4"
+
+# 4. Benchmark + figures + error analysis
+python evaluate_all.py    --data-root data
+python make_figures.py
+python error_analysis.py  --data-root data
+python demo.py --image sample.jpg --data-root data \
+    --shvit-dir SHViT \
+    --checkpoint "CV_Research_Paper_Caltech101/Stage 3: fine-tuning SHViT/shvit_s4/best.pth"
+```

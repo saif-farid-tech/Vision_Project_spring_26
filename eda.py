@@ -1,6 +1,6 @@
 """
 eda.py
-Food-101 EDA visualizations for the report's data section.
+Caltech-101 EDA visualizations for the report's data section.
 
 Outputs (under --output-dir):
     eda_samples.png            5x5 grid of random training images + labels
@@ -9,59 +9,69 @@ Outputs (under --output-dir):
     eda_summary.txt            numerical statistics
 
 Usage:
-    python eda.py --data-root data --output-dir eda_outputs
+    python eda.py --data-root data \\
+        --output-dir CV_Research_Paper_Caltech101/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/eda_outputs
 """
 
 import argparse
 import random
+import sys
 from collections import Counter
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
-from torchvision.datasets import Food101
+
+
+_REPO_ROOT = Path(__file__).resolve().parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+import splits  # noqa: E402
+from datasets.caltech101 import Caltech101  # noqa: E402
 
 
 def load_datasets(data_root: Path):
-    """Both splits, no transform — we only need labels and file paths."""
-    train = Food101(root=str(data_root), split="train", download=True)
-    test  = Food101(root=str(data_root), split="test",  download=True)
-    return train, test
+    """Returns (train_items, test_items, classnames) from the Tip-Adapter split."""
+    splits.ensure_prepared(data_root)
+    ds = Caltech101(root=str(data_root), num_shots=-1)
+    return ds.train_full, ds.test, ds.classnames
 
 
-def class_counts(ds) -> Counter:
-    return Counter(ds._labels)
+def class_counts(items) -> Counter:
+    return Counter(item.label for item in items)
 
 
 # ---------------------------------------------------------------------------
 # Plots
 # ---------------------------------------------------------------------------
 
-def plot_sample_grid(train, classes, out_path: Path, n_rows=5, n_cols=5):
-    indices = random.sample(range(len(train)), n_rows * n_cols)
+def plot_sample_grid(items, classes, out_path: Path, n_rows=5, n_cols=5):
+    indices = random.sample(range(len(items)), n_rows * n_cols)
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 2.2, n_rows * 2.4))
     for ax, idx in zip(axes.flat, indices):
-        img, label = train[idx]  # PIL.Image
+        item = items[idx]
+        img = Image.open(item.impath).convert("RGB")
         ax.imshow(img)
-        ax.set_title(classes[label].replace("_", " "), fontsize=8)
+        ax.set_title(classes[item.label].replace("_", " "), fontsize=8)
         ax.set_xticks([])
         ax.set_yticks([])
-    fig.suptitle("Food-101 random training samples", fontsize=12)
+    fig.suptitle("Caltech-101 random training samples", fontsize=12)
     fig.tight_layout()
     fig.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
 
 def plot_image_sizes(sizes, out_path: Path):
-    widths  = [w for w, _ in sizes]
+    widths = [w for w, _ in sizes]
     heights = [h for _, h in sizes]
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-    axes[0].hist(widths,  bins=40, color="steelblue",   edgecolor="black")
+    axes[0].hist(widths, bins=40, color="steelblue", edgecolor="black")
     axes[0].set_title(f"Image widths  (n={len(widths)})")
     axes[0].set_xlabel("Width (px)")
     axes[0].set_ylabel("Count")
-    axes[1].hist(heights, bins=40, color="darkorange",  edgecolor="black")
+    axes[1].hist(heights, bins=40, color="darkorange", edgecolor="black")
     axes[1].set_title(f"Image heights (n={len(heights)})")
     axes[1].set_xlabel("Height (px)")
     axes[1].set_ylabel("Count")
@@ -71,22 +81,21 @@ def plot_image_sizes(sizes, out_path: Path):
 
 
 def plot_class_distribution(train, test, classes, out_path: Path):
-    """Food101.classes is already sorted alphabetically by torchvision."""
     train_counts = class_counts(train)
-    test_counts  = class_counts(test)
+    test_counts = class_counts(test)
     order = list(range(len(classes)))
     train_vals = [train_counts.get(i, 0) for i in order]
-    test_vals  = [test_counts.get(i, 0)  for i in order]
+    test_vals = [test_counts.get(i, 0) for i in order]
 
     x = np.arange(len(classes))
     fig, ax = plt.subplots(figsize=(20, 5))
-    ax.bar(x, train_vals, color="steelblue",  label="train")
-    ax.bar(x, test_vals,  color="darkorange", bottom=train_vals, label="test")
+    ax.bar(x, train_vals, color="steelblue", label="train")
+    ax.bar(x, test_vals, color="darkorange", bottom=train_vals, label="test")
     ax.set_xticks(x)
     ax.set_xticklabels([classes[i].replace("_", " ") for i in order],
                        rotation=90, fontsize=6)
     ax.set_ylabel("Image count")
-    ax.set_title("Food-101 class distribution (alphabetical)")
+    ax.set_title("Caltech-101 class distribution (alphabetical)")
     ax.legend()
     fig.tight_layout()
     fig.savefig(out_path, dpi=300, bbox_inches="tight")
@@ -99,12 +108,12 @@ def plot_class_distribution(train, test, classes, out_path: Path):
 
 def write_summary(train, test, sizes, classes, out_path: Path):
     train_per = list(class_counts(train).values())
-    test_per  = list(class_counts(test).values())
-    widths    = [w for w, _ in sizes]
-    heights   = [h for _, h in sizes]
+    test_per = list(class_counts(test).values())
+    widths = [w for w, _ in sizes]
+    heights = [h for _, h in sizes]
 
     lines = [
-        "Food-101 EDA Summary",
+        "Caltech-101 EDA Summary",
         "=" * 40,
         f"Total images        : {len(train) + len(test):,}",
         f"  train             : {len(train):,}",
@@ -114,11 +123,9 @@ def write_summary(train, test, sizes, classes, out_path: Path):
         "Train per-class counts",
         f"  min / max / mean  : {min(train_per)} / {max(train_per)} / {np.mean(train_per):.2f}",
         f"  std               : {np.std(train_per):.4f}",
-        f"  unique values     : {sorted(set(train_per))}",
         "Test per-class counts",
         f"  min / max / mean  : {min(test_per)} / {max(test_per)} / {np.mean(test_per):.2f}",
         f"  std               : {np.std(test_per):.4f}",
-        f"  unique values     : {sorted(set(test_per))}",
         "",
         f"Image dimensions (random sample of {len(sizes)} train images)",
         f"  width  min/max    : {min(widths)} / {max(widths)}",
@@ -138,8 +145,12 @@ def write_summary(train, test, sizes, classes, out_path: Path):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--data-root",  type=Path, default=Path("data"))
-    p.add_argument("--output-dir", type=Path, default=Path("eda_outputs"))
+    p.add_argument("--data-root", type=Path, default=Path("data"))
+    p.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("CV_Research_Paper_Caltech101/Stage 4: Benchmarking and Demo/analysis/eda_outputs"),
+    )
     p.add_argument("--size-sample", type=int, default=1000,
                    help="number of train images sampled for the size histograms")
     p.add_argument("--seed", type=int, default=0)
@@ -149,20 +160,19 @@ def main():
     np.random.seed(args.seed)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    train, test = load_datasets(args.data_root)
-    classes = train.classes
+    train, test, classes = load_datasets(args.data_root)
     print(f"Train: {len(train):,}  Test: {len(test):,}  Classes: {len(classes)}")
 
-    # 5x5 sample grid (decodes 25 images — cheap)
+    # 5x5 sample grid
     plot_sample_grid(train, classes, args.output_dir / "eda_samples.png")
     print("Wrote eda_samples.png")
 
-    # Image-size histograms — header-only reads, no pixel decode
+    # Image-size histograms — header-only reads
     n = min(args.size_sample, len(train))
     indices = random.sample(range(len(train)), n)
     sizes = []
     for i in indices:
-        with Image.open(train._image_files[i]) as im:
+        with Image.open(train[i].impath) as im:
             sizes.append(im.size)  # (width, height)
     plot_image_sizes(sizes, args.output_dir / "eda_image_sizes.png")
     print("Wrote eda_image_sizes.png")

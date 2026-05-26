@@ -1,11 +1,12 @@
 """
 evaluate_all.py
-Run inference and benchmarks for the 6 trained Food-101 classifiers
-(ResNet-50, MobileNetV2, SHViT-S1..S4) on Food101(split='test').
+Run inference and benchmarks for the 6 trained Caltech-101 classifiers
+(ResNet-50, MobileNetV2, SHViT-S1..S4) on the held-out Caltech-101 test split
+(from the Tip-Adapter split_zhou_Caltech101.json).
 
 Per model:
     - Top-1 / Top-5 accuracy
-    - Per-class accuracy (101 floats) and 101x101 confusion matrix
+    - Per-class accuracy and confusion matrix
     - all_preds and all_targets
     - Param count (M), GFLOPs (fvcore), GPU throughput, CPU latency
 
@@ -16,10 +17,10 @@ Outputs:
 
 Usage:
     python evaluate_all.py \\
-        --checkpoints-dir . \\
+        --checkpoints-dir CV_Research_Paper_Caltech101 \\
         --shvit-dir       SHViT \\
         --data-root       data \\
-        --output-dir      eval_outputs
+        --output-dir      CV_Research_Paper_Caltech101/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/results
 """
 
 import argparse
@@ -32,18 +33,18 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torchvision.datasets import Food101
 from torchvision.models import mobilenet_v2, resnet50
 
-_REPO_ROOT = Path(__file__).parent
+_REPO_ROOT = Path(__file__).resolve().parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from augmentation import build_val_transform                                # noqa: E402
 from metrics import evaluate_model                                          # noqa: E402
+import splits                                                               # noqa: E402
 
 
-NUM_CLASSES = 101
+NUM_CLASSES = 100  # Caltech-101 under the Tip-Adapter / CoOp split
 
 # (model name, subdir under checkpoints-dir, checkpoint format)
 MODELS = [
@@ -76,11 +77,6 @@ def build_model(name: str) -> nn.Module:
 
 
 def load_state_dict(path: Path, kind: str):
-    """
-    baseline: bare state_dict on disk (torch.save(model.state_dict(), path))
-    shvit   : {"model": state_dict, "optimizer": ..., "epoch": ...}
-    Falls back gracefully if the file actually wraps the state_dict.
-    """
     obj = torch.load(path, map_location="cpu", weights_only=False)
     if kind == "shvit":
         return obj["model"]
@@ -103,7 +99,6 @@ def measure_params_m(model: nn.Module) -> float:
 
 
 def measure_gflops(name: str, img_size: int = 224):
-    """fvcore FlopCountAnalysis on a fresh CPU instance (1-image input)."""
     from fvcore.nn import FlopCountAnalysis
     m = build_model(name).cpu().eval()
     x = torch.randn(1, 3, img_size, img_size)
@@ -125,7 +120,7 @@ def measure_gpu_throughput(model, device, batch=64, warmup=20, iters=200, img_si
             model(x)
         torch.cuda.synchronize()
         elapsed = time.perf_counter() - t0
-    return iters * batch / elapsed  # images/sec
+    return iters * batch / elapsed
 
 
 def measure_cpu_latency(model, batch=1, warmup=10, iters=100, img_size=224):
@@ -138,7 +133,7 @@ def measure_cpu_latency(model, batch=1, warmup=10, iters=100, img_size=224):
         for _ in range(iters):
             model(x)
         elapsed = time.perf_counter() - t0
-    return (elapsed / iters) * 1000.0  # ms per forward pass
+    return (elapsed / iters) * 1000.0
 
 
 # ---------------------------------------------------------------------------
@@ -201,10 +196,12 @@ def write_latex_table(rows, path: Path) -> None:
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--checkpoints-dir", type=Path, default=_REPO_ROOT)
+    p.add_argument("--checkpoints-dir", type=Path,
+                   default=Path("CV_Research_Paper_Caltech101"))
     p.add_argument("--shvit-dir",       type=Path, default=_REPO_ROOT / "SHViT")
     p.add_argument("--data-root",       type=Path, default=Path("data"))
-    p.add_argument("--output-dir",      type=Path, default=Path("eval_outputs"))
+    p.add_argument("--output-dir",      type=Path,
+                   default=Path("CV_Research_Paper_Caltech101/Stage 4: Benchmarking and Demo/analysis/results"))
     p.add_argument("--batch-size",      type=int,  default=64)
     p.add_argument("--num-workers",     type=int,  default=2)
     args = p.parse_args()
@@ -213,7 +210,6 @@ def main():
     torch.backends.cudnn.benchmark = True
     print(f"Device: {device}")
 
-    # Register SHViT model family with timm via side-effect import.
     sys.path.insert(0, str(args.shvit_dir.resolve()))
     try:
         import model as _shvit_pkg  # noqa: F401  registers shvit_s1..s4
@@ -223,17 +219,15 @@ def main():
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    # ---- Test set --------------------------------------------------------
-    test_ds = Food101(
-        root=str(args.data_root), split="test",
-        transform=build_val_transform(), download=True,
-    )
+    # ---- Test set (Caltech-101 Tip-Adapter split) -----------------------
+    splits.ensure_prepared(args.data_root)
+    test_ds = splits.load_test(args.data_root, transform=build_val_transform())
     class_names = test_ds.classes
     test_loader = DataLoader(
         test_ds, batch_size=args.batch_size, shuffle=False,
         num_workers=args.num_workers, pin_memory=True,
     )
-    print(f"Test set: {len(test_ds):,} images")
+    print(f"Test set: {len(test_ds):,} images   classes: {len(class_names)}")
 
     # ---- Per-model loop --------------------------------------------------
     summary_rows = []
@@ -263,13 +257,13 @@ def main():
 
         # ---- Inference ---------------------------------------------------
         eval_out = evaluate_model(model, test_loader, device, class_names)
-        top1     = float(eval_out["top1_acc"])
-        top5     = float(eval_out["top5_acc"])
-        pca_dict = eval_out["per_class_acc"]              # {name: pct or None}
-        pca_list = [pca_dict[c] for c in class_names]     # 101 floats (in class-index order)
-        cm       = eval_out["confusion_matrix"]           # np.ndarray (101, 101)
-        preds    = eval_out["all_preds"]
-        targets  = eval_out["all_targets"]
+        top1 = float(eval_out["top1_acc"])
+        top5 = float(eval_out["top5_acc"])
+        pca_dict = eval_out["per_class_acc"]
+        pca_list = [pca_dict[c] for c in class_names]
+        cm = eval_out["confusion_matrix"]
+        preds = eval_out["all_preds"]
+        targets = eval_out["all_targets"]
 
         # ---- Benchmarks --------------------------------------------------
         params_m = measure_params_m(model)
@@ -334,10 +328,9 @@ def main():
         print("\nNo models evaluated.")
         return
 
-    # Sort by GFLOPs ascending; missing GFLOPs sink to the end.
     summary_rows.sort(key=lambda r: (r["gflops"] is None, r["gflops"] or 0.0))
 
-    md_path  = args.output_dir / "results_table.md"
+    md_path = args.output_dir / "results_table.md"
     tex_path = args.output_dir / "results_table.tex"
     write_markdown_table(summary_rows, md_path)
     write_latex_table(summary_rows, tex_path)

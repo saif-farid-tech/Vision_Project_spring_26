@@ -1,9 +1,7 @@
 """
 error_analysis.py
-Detailed error analysis for SHViT-S4 on the Food-101 test set.
-
-Reads <results-dir>/shvit_s4/results.json (per_class_acc, confusion_matrix,
-all_preds, all_targets) and produces:
+Detailed error analysis for SHViT-S4 on the Caltech-101 test set
+(Tip-Adapter split). Reads <results-dir>/shvit_s4/results.json and produces:
 
     confusion_top20.png         row-normalized heatmap, 20 worst classes (seaborn)
     worst_15_categories.png     horizontal bar chart of the 15 lowest accuracies
@@ -13,11 +11,11 @@ all_preds, all_targets) and produces:
 
 Usage:
     python error_analysis.py \\
-        --results-dir eval_outputs \\
+        --results-dir CV_Research_Paper_Caltech101/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/results \\
         --data-root   data \\
         --shvit-dir   SHViT \\
-        --checkpoint  "Stage 3: fine-tuning SHViT/shvit_s4/best.pth" \\
-        --output-dir  error_analysis
+        --checkpoint  "CV_Research_Paper_Caltech101/Stage 3: fine-tuning SHViT/shvit_s4/best.pth" \\
+        --output-dir  CV_Research_Paper_Caltech101/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/error_analysis_outputs
 """
 
 import argparse
@@ -31,22 +29,23 @@ import numpy as np
 import seaborn as sns
 import torch
 import torch.nn.functional as F
-from torchvision.datasets import Food101
+from PIL import Image
 
 
-_REPO_ROOT = Path(__file__).parent
+_REPO_ROOT = Path(__file__).resolve().parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from augmentation import build_val_transform                                  # noqa: E402
+from augmentation import build_val_transform  # noqa: E402
+import splits  # noqa: E402
 
 
-NUM_CLASSES        = 101
-N_WORST_HEATMAP    = 20
-N_WORST_BARS       = 15
-N_GRID_ROWS        = 4
-N_GRID_COLS        = 4
-N_TOP_CONFUSED     = 10
+NUM_CLASSES = 100  # Caltech-101 / CoOp split
+N_WORST_HEATMAP = 20
+N_WORST_BARS = 15
+N_GRID_ROWS = 4
+N_GRID_COLS = 4
+N_TOP_CONFUSED = 10
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +53,6 @@ N_TOP_CONFUSED     = 10
 # ---------------------------------------------------------------------------
 
 def load_shvit_s4(shvit_dir: Path, checkpoint: Path, device):
-    """Build SHViT-S4 via timm and load the fine-tune checkpoint."""
     sys.path.insert(0, str(shvit_dir.resolve()))
     import model as _shvit_pkg  # noqa: F401  registers shvit_* with timm
     from timm.models import create_model
@@ -75,7 +73,6 @@ def load_shvit_s4(shvit_dir: Path, checkpoint: Path, device):
 # ---------------------------------------------------------------------------
 
 def confused_pairs(cm: np.ndarray, class_names, top_k: int = N_TOP_CONFUSED):
-    """Top-k off-diagonal (i, j) pairs by P(predicted = j | true = i)."""
     row_sums = cm.sum(axis=1)
     pairs = []
     n = cm.shape[0]
@@ -139,7 +136,7 @@ def plot_worst_15(per_class_acc, class_names, out_path: Path):
     ax.set_yticklabels(labels)
     ax.invert_yaxis()
     ax.set_xlabel("Per-class accuracy (%)")
-    ax.set_title(f"{N_WORST_BARS} worst-performing classes (SHViT-S4)")
+    ax.set_title(f"{N_WORST_BARS} worst-performing classes (SHViT-S4 on Caltech-101)")
     for i, v in enumerate(values):
         ax.text(v + 0.5, i, f"{v:.1f}", va="center", fontsize=9)
     ax.set_xlim(0, max(values) + 8)
@@ -150,7 +147,7 @@ def plot_worst_15(per_class_acc, class_names, out_path: Path):
     print(f"Wrote {out_path}")
 
 
-def plot_misclassified_grid(args, all_preds, all_targets, class_names, device, out_path: Path):
+def plot_misclassified_grid(args, all_preds, all_targets, class_names, device, test_ds, out_path: Path):
     misclass = np.where(all_preds != all_targets)[0]
     if misclass.size == 0:
         print("[skip] misclassified_grid: zero misclassifications")
@@ -159,24 +156,21 @@ def plot_misclassified_grid(args, all_preds, all_targets, class_names, device, o
     sample = sorted(random.sample(list(misclass), min(n, len(misclass))))
 
     val_tf = build_val_transform()
-    ds_input   = Food101(root=str(args.data_root), split="test",
-                         transform=val_tf, download=True)
-    ds_display = Food101(root=str(args.data_root), split="test",
-                         transform=None,   download=True)
-
     model = load_shvit_s4(args.shvit_dir, args.checkpoint, device)
 
-    inputs = torch.stack([ds_input[int(i)][0] for i in sample]).to(device)
+    # Build tensor inputs from the existing test dataset (which already applies val_tf).
+    inputs = torch.stack([test_ds[int(i)][0] for i in sample]).to(device)
     with torch.no_grad():
         probs = F.softmax(model(inputs), dim=1).cpu()
 
     fig, axes = plt.subplots(N_GRID_ROWS, N_GRID_COLS,
                              figsize=(N_GRID_COLS * 3.6, N_GRID_ROWS * 4.0))
     for ax, batch_pos, idx in zip(axes.flat, range(len(sample)), sample):
-        img, _ = ds_display[int(idx)]
+        img_path = test_ds.image_paths[int(idx)]
+        img = Image.open(img_path).convert("RGB")
         true_c = int(all_targets[idx])
-        pred_c = int(all_preds[idx])         # canonical pred from results.json
-        conf   = probs[batch_pos, pred_c].item()
+        pred_c = int(all_preds[idx])
+        conf = probs[batch_pos, pred_c].item()
         ax.imshow(img)
         ax.set_title(
             f"true: {class_names[true_c].replace('_', ' ')}\n"
@@ -187,7 +181,7 @@ def plot_misclassified_grid(args, all_preds, all_targets, class_names, device, o
         ax.set_xticks([]); ax.set_yticks([])
     for ax in axes.flat[len(sample):]:
         ax.set_visible(False)
-    fig.suptitle("Random misclassified test images (SHViT-S4)", fontsize=12)
+    fig.suptitle("Random misclassified test images (SHViT-S4, Caltech-101)", fontsize=12)
     fig.tight_layout()
     fig.savefig(out_path, dpi=300, facecolor="white", bbox_inches="tight")
     plt.close(fig)
@@ -202,10 +196,10 @@ def write_summary(results, class_names, top_pairs, test_size, out_path: Path):
     pca = results["per_class_acc"]
     order = np.argsort(pca)
     worst10 = order[:10]
-    best10  = order[::-1][:10]
+    best10 = order[::-1][:10]
 
     lines = [
-        "SHViT-S4 Error Analysis Summary",
+        "SHViT-S4 Error Analysis Summary (Caltech-101)",
         "=" * 48,
         "",
         "Overall:",
@@ -236,12 +230,14 @@ def write_summary(results, class_names, top_pairs, test_size, out_path: Path):
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--results-dir", type=Path, default=Path("eval_outputs"))
+    p.add_argument("--results-dir", type=Path,
+                   default=Path("CV_Research_Paper_Caltech101/Stage 4: Benchmarking and Demo/analysis/results"))
     p.add_argument("--data-root",   type=Path, default=Path("data"))
     p.add_argument("--shvit-dir",   type=Path, default=_REPO_ROOT / "SHViT")
     p.add_argument("--checkpoint",  type=Path,
-                   default=_REPO_ROOT / "Stage 3: fine-tuning SHViT/shvit_s4/best.pth")
-    p.add_argument("--output-dir",  type=Path, default=Path("error_analysis"))
+                   default=Path("CV_Research_Paper_Caltech101/Stage 3: fine-tuning SHViT/shvit_s4/best.pth"))
+    p.add_argument("--output-dir",  type=Path,
+                   default=Path("CV_Research_Paper_Caltech101/Stage 4: Benchmarking and Demo/analysis/error_analysis_outputs"))
     p.add_argument("--seed",        type=int,  default=0)
     return p.parse_args()
 
@@ -259,16 +255,17 @@ def main():
     with open(results_path) as f:
         results = json.load(f)
 
-    pca         = np.asarray(results["per_class_acc"], dtype=float)
-    cm          = np.asarray(results["confusion_matrix"])
-    all_preds   = np.asarray(results["all_preds"])
+    pca = np.asarray(results["per_class_acc"], dtype=float)
+    cm = np.asarray(results["confusion_matrix"])
+    all_preds = np.asarray(results["all_preds"])
     all_targets = np.asarray(results["all_targets"])
 
-    # ---- Class names from Food101(split='test') -------------------------
-    test_ds = Food101(root=str(args.data_root), split="test", download=True)
+    # ---- Class names from Caltech-101 test split ------------------------
+    splits.ensure_prepared(args.data_root)
+    test_ds = splits.load_test(args.data_root, transform=build_val_transform())
     class_names = list(test_ds.classes)
     if len(class_names) != NUM_CLASSES:
-        raise SystemExit(f"expected {NUM_CLASSES} classes, got {len(class_names)}")
+        print(f"[warn] expected {NUM_CLASSES} classes, got {len(class_names)}")
 
     # ---- Console: worst-10 / best-10 ------------------------------------
     order = np.argsort(pca)
@@ -298,7 +295,7 @@ def main():
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         try:
             plot_misclassified_grid(
-                args, all_preds, all_targets, class_names, device,
+                args, all_preds, all_targets, class_names, device, test_ds,
                 args.output_dir / "misclassified_grid.png",
             )
         except Exception as exc:
