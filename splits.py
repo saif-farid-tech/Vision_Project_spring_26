@@ -1,10 +1,9 @@
-"""splits.py — train/val/test loader for Caltech-101 using the Tip-Adapter
-style split JSON (`split_zhou_Caltech101.json`).
+"""splits.py — train/val/test loader for Flowers102 using the Tip-Adapter
+style split JSON (`split_zhou_OxfordFlowers.json`).
 
 The CoOp / Tip-Adapter split bakes the train / val / test partition into a
-single JSON, so we don't need per-class count manifests like Food-101 did.
-This module exposes one helper, `load_split`, which mirrors the old Food-101
-API:
+single JSON, so we don't need per-class count manifests. This module exposes
+the same API as the Flowers102 variant:
 
     train_ds, val_ds = splits.load_split(
         data_root="data",
@@ -12,8 +11,8 @@ API:
         val_transform=val_tf,
     )
 
-It also exposes `load_test`, since Caltech-101 has an explicit held-out test
-list (we don't try to repurpose the val set as test).
+`load_test` returns the held-out test split, and `ensure_prepared` triggers
+the download / split generation if needed.
 """
 
 from pathlib import Path
@@ -21,11 +20,10 @@ from typing import Optional, Tuple
 
 from torch.utils.data import Dataset
 
-from datasets.caltech101 import Caltech101
+from datasets.oxford_flowers import OxfordFlowers
 from datasets.utils import DatasetWrapper
 
 
-# Default torchvision-style train/val/test input size used by all stages.
 DEFAULT_INPUT_SIZE = 224
 
 
@@ -33,12 +31,8 @@ class _TipDataset(Dataset):
     """Thin adapter from a Tip-Adapter Datum list to a torchvision-style
     (image_tensor, label) Dataset.
 
-    Mirrors `DatasetWrapper` semantics but exposes the standard
-    `__getitem__` -> (tensor, int) interface that the existing training
-    loops in this repo already speak.
-
-    Also exposes `.classes` (list[str], sorted by label) so existing code
-    that did `dataset.classes` keeps working.
+    Exposes `.classes` (list[str], sorted by label) so existing code
+    that does `dataset.classes` keeps working.
     """
 
     def __init__(
@@ -83,14 +77,10 @@ def _build(
     input_size: int,
     num_shots: int,
 ) -> Tuple[_TipDataset, _TipDataset, _TipDataset, list]:
-    """Construct the underlying Tip-Adapter Caltech101 instance and wrap
-    each split. Returned tuple: (train_full, val, test, classnames).
-
-    When `num_shots > 0` the *first* element returned is the few-shot subset
-    (matching Tip-Adapter); when `num_shots <= 0` it is the full labeled
-    training set.
+    """Construct the underlying Tip-Adapter OxfordFlowers instance and wrap
+    each split. Returned tuple: (train_full_or_fewshot, val, test, classnames).
     """
-    ds = Caltech101(root=str(data_root), num_shots=num_shots)
+    ds = OxfordFlowers(root=str(data_root), num_shots=num_shots)
     train_source = ds.train_x if num_shots > 0 else ds.train_full
 
     train_ds = _TipDataset(
@@ -114,12 +104,9 @@ def load_split(
     val_transform=None,
     input_size: int = DEFAULT_INPUT_SIZE,
     num_shots: int = -1,
-    # `split_json` is accepted for backwards compat with the old Food-101 API,
-    # but is unused: the Tip-Adapter split path is fixed at
-    # <data_root>/caltech-101/split_zhou_Caltech101.json.
-    split_json: Optional[str] = None,
+    split_json: Optional[str] = None,  # ignored — kept for API compat
 ) -> Tuple[_TipDataset, _TipDataset]:
-    """Return (train_ds, val_ds) for Caltech-101 using the Tip-Adapter split."""
+    """Return (train_ds, val_ds) for Flowers102 using the Tip-Adapter split."""
     train_ds, val_ds, _test_ds, _ = _build(
         data_root, train_transform, val_transform, val_transform,
         input_size=input_size, num_shots=num_shots,
@@ -158,6 +145,6 @@ def load_all(
 
 
 def ensure_prepared(data_root, seed: int = 1) -> Path:
-    """Trigger Caltech-101 download / split generation if needed and return
+    """Trigger Flowers102 download / split generation if needed and return
     the dataset root. Safe to call from any script."""
-    return Caltech101.auto_prepare(data_root, seed=seed)
+    return OxfordFlowers.auto_prepare(data_root, seed=seed)

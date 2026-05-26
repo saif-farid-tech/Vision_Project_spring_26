@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup_shvit.sh — Full SHViT setup for Caltech-101 classification
+# setup_shvit.sh — Full SHViT setup for Flowers102 classification
 # Run from: /home/user/Vision_Project_spring_26
 set -e
 
@@ -40,5 +40,5 @@ echo ""
 echo "=== Done! ==="
 echo "Next steps:"
 echo "  conda activate shvit"
-echo "  python prepare_caltech101.py       # download + organize Caltech-101"
+echo "  python prepare_flowers102.py       # download + organize Flowers102"
 echo "  python verify_model.py             # quick eval on 50 images"

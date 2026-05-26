@@ -1,7 +1,7 @@
 """
 verify_model.py
 Loads SHViT-S4 from a local checkpoint and runs inference on a small
-subset of Caltech-101 validation images to confirm the model loads correctly.
+subset of Flowers102 validation images to confirm the model loads correctly.
 
 Usage:
     python verify_model.py \\
@@ -12,7 +12,7 @@ Usage:
 
 The script prints per-image predictions and a summary timing.
 Top-1 predictions are ImageNet class indices, so expect ~zero accuracy vs.
-Caltech-101 labels — the point is just to confirm the model runs without errors.
+Flowers102 labels — the point is just to confirm the model runs without errors.
 """
 
 import argparse
@@ -48,17 +48,14 @@ def get_transform(img_size: int = 224) -> transforms.Compose:
 
 
 def collect_images(image_dir: Path, n: int):
-    """Return up to n (path, class_name) pairs from class subdirectories."""
+    """Return up to n (path, class_name) pairs from Flowers102's flat jpg/ dir.
+    Class names are not encoded in filenames here, so we just emit "unknown"
+    for the class — verify_model.py only needs the inference path to run."""
     items = []
-    for class_dir in sorted(image_dir.iterdir()):
-        if not class_dir.is_dir():
-            continue
-        if class_dir.name in ("BACKGROUND_Google", "Faces_easy"):
-            continue
-        for img_path in sorted(class_dir.glob("*.jpg")):
-            items.append((img_path, class_dir.name))
-            if len(items) >= n:
-                return items
+    for img_path in sorted(image_dir.glob("*.jpg")):
+        items.append((img_path, "unknown"))
+        if len(items) >= n:
+            return items
     return items
 
 
@@ -69,8 +66,8 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, default=Path("weights/shvit_s4.pth"),
                         help="Path to shvit_s4.pth")
     parser.add_argument("--data-root", type=Path, default=Path("data"),
-                        help="Caltech-101 parent dir; expects "
-                             "<data-root>/caltech-101/101_ObjectCategories/")
+                        help="Flowers102 parent dir; expects "
+                             "<data-root>/oxford_flowers/jpg/")
     parser.add_argument("--num-images", type=int, default=50,
                         help="Number of images to run inference on")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -119,9 +116,9 @@ def main() -> None:
     # ------------------------------------------------------------------ #
     # 4. Collect images (auto-prepare dataset if missing)
     # ------------------------------------------------------------------ #
-    image_dir = args.data_root / "caltech-101" / "101_ObjectCategories"
+    image_dir = args.data_root / "oxford_flowers" / "jpg"
     if not image_dir.exists():
-        print(f"[info] {image_dir} not found, downloading Caltech-101 first ...")
+        print(f"[info] {image_dir} not found, downloading Flowers102 first ...")
         import splits  # noqa: E402
         splits.ensure_prepared(args.data_root)
 
@@ -158,7 +155,7 @@ def main() -> None:
           f"({elapsed / len(results) * 1000:.1f} ms/image)")
     print("\n[OK] Model loaded and ran inference without errors.")
     print("Note: top-1 predictions are ImageNet class indices — accuracy vs.")
-    print("Caltech-101 labels is expected to be low without fine-tuning.")
+    print("Flowers102 labels is expected to be low without fine-tuning.")
 
 
 if __name__ == "__main__":

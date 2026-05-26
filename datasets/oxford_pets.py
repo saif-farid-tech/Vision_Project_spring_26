@@ -1,7 +1,7 @@
 """Vendored from https://github.com/gaopengcuhk/Tip-Adapter/blob/main/datasets/oxford_pets.py
 
 We only use OxfordPets.read_split / save_split / split_trainval as helpers for
-the Caltech-101 loader (the OxfordPets class itself is not used by this repo).
+the OxfordFlowers loader (the OxfordPets class itself is not used by this repo).
 """
 
 import os

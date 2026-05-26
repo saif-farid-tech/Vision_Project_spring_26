@@ -16,9 +16,8 @@ from timm.data.mixup import Mixup
 CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
 CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
 
-# Caltech-101 has 100 classes under the CoOp / Tip-Adapter split
-# (BACKGROUND_Google and Faces_easy are excluded).
-NUM_CLASSES = 100
+# Oxford Flowers 102 has 102 classes (matching the dataset name).
+NUM_CLASSES = 102
 
 
 def build_train_transform(img_size: int = 224):
