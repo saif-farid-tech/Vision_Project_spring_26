@@ -1,7 +1,10 @@
 # CV_Research_Paper_OxfordPets
 
-Output root for every script and notebook in this branch. The expected layout
-once the experiment has been run end-to-end:
+Here I uploaded all the outputs of all notebooks I ran, so that you can see the expected cell outputs.
+
+Google drive link for the models and results: https://drive.google.com/drive/folders/19LX_tUojVIog0ZItmfmyHYstJAWIXnJ8?usp=sharing
+
+This is the expected layout once the experiment has been run end-to-end:
 
 ```
 CV_Research_Paper_OxfordPets/
@@ -14,7 +17,7 @@ CV_Research_Paper_OxfordPets/
 │   ├── shvit_s3/{training_log.csv, best.pth, checkpoint_*.pth}
 │   └── shvit_s4/{training_log.csv, best.pth, checkpoint_*.pth}
 └── Stage 4: Benchmarking and Demo/
-    └── analysis/
+    └── analysis.zip/
         ├── eda_outputs/             (eda.py)
         ├── results/                 (evaluate_all.py — per-model results.json + tables)
         ├── figures/                 (make_figures.py — training curves, accuracy bars, …)
