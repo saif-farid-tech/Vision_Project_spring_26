@@ -13,10 +13,15 @@ directory **`CV_Research_Paper_StanfordCars/`** so the final artifacts mirror
 the stage layout one-to-one.
 
 > **Data availability note:** the original Stanford Cars host
-> (`ai.stanford.edu/~jkrause/cars/`) went offline in late 2022, so
-> `torchvision.datasets.StanfordCars` and the bundled prep script may not
-> be able to auto-download the images. If that happens, grab the dataset
-> from a mirror (Kaggle / HuggingFace) and unpack it under
+> (`ai.stanford.edu/~jkrause/cars/`) went offline in late 2022, so the URLs
+> baked into `torchvision.datasets.StanfordCars` are dead (recent torchvision
+> versions raise immediately on `download=True`). The bundled prep script now
+> falls back to cloning the community mirror
+> [`jhpohovey/StanfordCars-Dataset`](https://github.com/jhpohovey/StanfordCars-Dataset),
+> which re-hosts the original images + devkit `.mat` files, so the auto-download
+> works again out of the box. If both that and torchvision fail (e.g. no
+> network access to GitHub), grab the dataset from any well-known mirror
+> (Kaggle / HuggingFace) and unpack it under
 > `<data-root>/stanford_cars/` so it has `cars_train/`, `cars_test/`, plus
 > the `devkit/` (or top-level) `cars_meta.mat`, `cars_train_annos.mat` and
 > `cars_test_annos_withlabels.mat` files. Then re-run

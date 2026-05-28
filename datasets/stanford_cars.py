@@ -5,17 +5,24 @@ Adds an `auto_prepare` classmethod that:
   * tries to download Stanford Cars via `torchvision.datasets.StanfordCars`
     and re-layouts the unpack into the Tip-Adapter convention
     `<root>/stanford_cars/{cars_train, cars_test, devkit, ...}`,
+  * if that fails (see NOTE below) falls back to cloning a maintained
+    community GitHub mirror that re-hosts the original files,
   * tries to fetch the official CoOp split JSON via gdown, and
   * falls back to a deterministic locally-generated 50/20/30 train/val/test
     split built from `cars_meta.mat` + `cars_train_annos.mat` +
     `cars_test_annos_withlabels.mat` if gdown is unavailable.
 
 NOTE on data availability: as of late 2022 the original Stanford Cars host
-(`ai.stanford.edu/~jkrause/cars/`) is offline; torchvision's StanfordCars
-download will fail accordingly. If the auto-download fails, you can grab the
-dataset from any well-known mirror (Kaggle, HuggingFace) and unpack it under
-`<root>/stanford_cars/` with the expected layout — then re-run this prep
-step (it will skip the download and just (re)build the split).
+(`ai.stanford.edu/~jkrause/cars/`) is offline, so the URLs baked into
+`torchvision.datasets.StanfordCars` are dead — recent torchvision versions
+even raise immediately on `download=True`. To keep the auto-download working,
+this module falls back to the community mirror at
+`https://github.com/jhpohovey/StanfordCars-Dataset`, which re-hosts the
+original images + devkit `.mat` files in the exact expected layout. If both
+the torchvision download and the mirror clone fail (e.g. no network), you can
+still grab the dataset from any well-known mirror (Kaggle, HuggingFace) and
+unpack it under `<root>/stanford_cars/` with the expected layout — then re-run
+this prep step (it will skip the download and just (re)build the split).
 """
 
 import os
@@ -32,6 +39,12 @@ template = ["a photo of a {}."]
 
 # Official CoOp split (also used by Tip-Adapter), hosted on Google Drive.
 OFFICIAL_SPLIT_GDRIVE_ID = "1ObCFbaAgVu0I-k_Au-gIUcefirdAuizT"
+
+# The original Stanford Cars host (ai.stanford.edu) is offline, so torchvision's
+# download links are dead. This community mirror re-hosts the original images
+# and devkit .mat files under a top-level `stanford_cars/` directory matching
+# the layout we expect.
+GITHUB_MIRROR_URL = "https://github.com/jhpohovey/StanfordCars-Dataset.git"
 
 
 class StanfordCars(DatasetBase):
@@ -109,21 +122,39 @@ class StanfordCars(DatasetBase):
 
     @staticmethod
     def _download_images(root: Path):
-        """Try downloading via torchvision.datasets.StanfordCars.
+        """Download Stanford Cars into `<root>/stanford_cars/`.
 
-        The original host is offline so this will likely fail; we still
-        attempt it because torchvision may eventually pick up a mirror, and
-        because the same call will succeed (no-op) if the user has dropped
-        a pre-extracted copy at the canonical path.
+        First tries `torchvision.datasets.StanfordCars` (a no-op if the user
+        has already dropped a pre-extracted copy at the canonical path). The
+        original Stanford host is offline, so on modern torchvision this fails
+        immediately — we then fall back to cloning the community GitHub mirror,
+        which re-hosts the original files in the expected layout.
+        """
+        StanfordCars._download_via_torchvision(root)
+
+        tv_root = root / StanfordCars.dataset_dir
+        if StanfordCars._has_images(tv_root):
+            return
+
+        # torchvision could not fetch the data (dead host); use the mirror.
+        StanfordCars._download_via_github_mirror(root)
+
+    @staticmethod
+    def _download_via_torchvision(root: Path):
+        """Attempt the torchvision download path.
+
+        Kept because it is a no-op success when a pre-extracted copy already
+        sits at the canonical path, and because older torchvision layouts
+        (a sibling `cars/` directory) are normalized here.
         """
         try:
             import torchvision.datasets as tv_datasets
         except ImportError:
-            print("[stanford_cars] torchvision missing; cannot auto-download")
+            print("[stanford_cars] torchvision missing; skipping torchvision download")
             return
 
         print(f"[stanford_cars] attempting Stanford Cars download via torchvision into {root} ...")
-        tv_root = root / "stanford_cars"
+        tv_root = root / StanfordCars.dataset_dir
         tv_root.mkdir(parents=True, exist_ok=True)
         for split in ("train", "test"):
             try:
@@ -141,6 +172,50 @@ class StanfordCars(DatasetBase):
                 dst = tv_root / sub
                 if src.exists() and not dst.exists():
                     shutil.move(str(src), str(dst))
+
+    @staticmethod
+    def _download_via_github_mirror(root: Path):
+        """Clone the community GitHub mirror and move it into place.
+
+        The mirror stores everything under a top-level `stanford_cars/`
+        directory (cars_train/, cars_test/, devkit/, cars_test_annos_withlabels.mat),
+        committed as plain blobs (no git-LFS), so a shallow clone pulls the
+        full dataset. We clone into a temp dir on the same filesystem as
+        `root` and move the contents into `<root>/stanford_cars/`.
+        """
+        import subprocess
+        import tempfile
+
+        ds_root = root / StanfordCars.dataset_dir
+        ds_root.mkdir(parents=True, exist_ok=True)
+
+        print(f"[stanford_cars] cloning GitHub mirror {GITHUB_MIRROR_URL} ...")
+        with tempfile.TemporaryDirectory(dir=str(root)) as tmp:
+            clone_dir = Path(tmp) / "StanfordCars-Dataset"
+            try:
+                subprocess.run(
+                    ["git", "clone", "--depth", "1", GITHUB_MIRROR_URL, str(clone_dir)],
+                    check=True,
+                )
+            except Exception as exc:
+                print(f"[stanford_cars] GitHub mirror clone failed: {exc}")
+                return
+
+            src_root = clone_dir / "stanford_cars"
+            if not src_root.exists():
+                print(f"[stanford_cars] unexpected mirror layout: {src_root} missing")
+                return
+
+            for item in src_root.iterdir():
+                dst = ds_root / item.name
+                if dst.exists():
+                    continue
+                shutil.move(str(item), str(dst))
+
+        if StanfordCars._has_images(ds_root):
+            print(f"[stanford_cars] dataset ready at {ds_root}")
+        else:
+            print(f"[stanford_cars] mirror clone did not yield images under {ds_root}")
 
     @staticmethod
     def _try_download_official_split(split_path: Path) -> bool:
