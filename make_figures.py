@@ -10,9 +10,9 @@ results.  Produces (under --output-dir):
 
 Usage:
     python make_figures.py \\
-        --results-dir CV_Research_Paper_OxfordPets/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/results \\
-        --logs-dir    CV_Research_Paper_OxfordPets \\
-        --output-dir  CV_Research_Paper_OxfordPets/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/figures
+        --results-dir CV_Research_Paper_FGVCAircraft/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/results \\
+        --logs-dir    CV_Research_Paper_FGVCAircraft \\
+        --output-dir  CV_Research_Paper_FGVCAircraft/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/figures
 """
 
 import argparse
@@ -99,7 +99,7 @@ def fig_training_curves(rows, out_path: Path):
         return
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Validation top-1 accuracy (%)")
-    ax.set_title("Validation top-1 over training (Oxford Pets)")
+    ax.set_title("Validation top-1 over training (FGVC Aircraft)")
     ax.grid(True, alpha=0.3)
     ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5),
               frameon=True, title="Model")
@@ -121,7 +121,7 @@ def fig_train_loss(rows, out_path: Path):
         return
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Training loss")
-    ax.set_title("Training loss over epochs (Oxford Pets)")
+    ax.set_title("Training loss over epochs (FGVC Aircraft)")
     ax.grid(True, alpha=0.3)
     ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5),
               frameon=True, title="Model")
@@ -159,7 +159,7 @@ def fig_speed_vs_accuracy(rows, out_path: Path):
     ax.legend(handles=shape_legend, loc="lower right", frameon=True)
     ax.set_xlabel("GPU throughput (images/s, batch 64)")
     ax.set_ylabel("Test top-1 accuracy (%)")
-    ax.set_title("Speed vs. accuracy on Oxford Pets test set")
+    ax.set_title("Speed vs. accuracy on FGVC Aircraft test set")
     ax.grid(True, alpha=0.3)
     _save(fig, out_path)
 
@@ -185,7 +185,7 @@ def fig_accuracy_bars(rows, out_path: Path):
                 bar.get_height() + headroom * 0.05,
                 f"{v:.2f}", ha="center", va="bottom", fontsize=10)
     ax.set_ylabel("Test top-1 accuracy (%)")
-    ax.set_title("Test top-1 accuracy on Oxford Pets (sorted)")
+    ax.set_title("Test top-1 accuracy on FGVC Aircraft (sorted)")
     ax.set_ylim(0, max(values) + headroom)
     ax.grid(axis="y", alpha=0.3)
     _save(fig, out_path)
@@ -194,13 +194,13 @@ def fig_accuracy_bars(rows, out_path: Path):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--results-dir", type=Path,
-                   default=Path("CV_Research_Paper_OxfordPets/Stage 4: Benchmarking and Demo/analysis/results"),
+                   default=Path("CV_Research_Paper_FGVCAircraft/Stage 4: Benchmarking and Demo/analysis/results"),
                    help="Directory with per-model results.json from evaluate_all.py")
     p.add_argument("--logs-dir",    type=Path,
-                   default=Path("CV_Research_Paper_OxfordPets"),
+                   default=Path("CV_Research_Paper_FGVCAircraft"),
                    help="Output root containing the Stage 2 / Stage 3 log subdirectories")
     p.add_argument("--output-dir",  type=Path,
-                   default=Path("CV_Research_Paper_OxfordPets/Stage 4: Benchmarking and Demo/analysis/figures"))
+                   default=Path("CV_Research_Paper_FGVCAircraft/Stage 4: Benchmarking and Demo/analysis/figures"))
     args = p.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)

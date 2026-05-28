@@ -1,9 +1,10 @@
-"""splits.py — train/val/test loader for Oxford Pets using the Tip-Adapter
-style split JSON (`split_zhou_OxfordPets.json`).
+"""splits.py — train/val/test loader for FGVC Aircraft.
 
-The CoOp / Tip-Adapter split bakes the train / val / test partition into a
-single JSON, so we don't need per-class count manifests. This module exposes
-the same API as the previous dataset variants:
+Unlike the other dataset variants in this project, FGVC Aircraft ships its
+own canonical `images_variant_{train,val,test}.txt` split files, so there
+is no CoOp JSON split JSON involved. This module exposes the same API as
+the previous dataset variants so the rest of the codebase doesn't need to
+change:
 
     train_ds, val_ds = splits.load_split(
         data_root="data",
@@ -12,7 +13,7 @@ the same API as the previous dataset variants:
     )
 
 `load_test` returns the held-out test split, and `ensure_prepared` triggers
-the download / split generation if needed.
+the download if needed.
 """
 
 from pathlib import Path
@@ -20,7 +21,7 @@ from typing import Optional, Tuple
 
 from torch.utils.data import Dataset
 
-from datasets.oxford_pets import OxfordPets
+from datasets.fgvc import FGVCAircraft
 from datasets.utils import DatasetWrapper
 
 
@@ -77,10 +78,10 @@ def _build(
     input_size: int,
     num_shots: int,
 ) -> Tuple[_TipDataset, _TipDataset, _TipDataset, list]:
-    """Construct the underlying Tip-Adapter OxfordPets instance and wrap
+    """Construct the underlying Tip-Adapter FGVCAircraft instance and wrap
     each split. Returned tuple: (train_full_or_fewshot, val, test, classnames).
     """
-    ds = OxfordPets(root=str(data_root), num_shots=num_shots)
+    ds = FGVCAircraft(root=str(data_root), num_shots=num_shots)
     train_source = ds.train_x if num_shots > 0 else ds.train_full
 
     train_ds = _TipDataset(
@@ -106,7 +107,7 @@ def load_split(
     num_shots: int = -1,
     split_json: Optional[str] = None,  # ignored — kept for API compat
 ) -> Tuple[_TipDataset, _TipDataset]:
-    """Return (train_ds, val_ds) for Oxford Pets using the Tip-Adapter split."""
+    """Return (train_ds, val_ds) for FGVC Aircraft using the official split files."""
     train_ds, val_ds, _test_ds, _ = _build(
         data_root, train_transform, val_transform, val_transform,
         input_size=input_size, num_shots=num_shots,
@@ -145,6 +146,7 @@ def load_all(
 
 
 def ensure_prepared(data_root, seed: int = 1) -> Path:
-    """Trigger Oxford Pets download / split generation if needed and return
-    the dataset root. Safe to call from any script."""
-    return OxfordPets.auto_prepare(data_root, seed=seed)
+    """Trigger FGVC Aircraft download if needed and return the dataset
+    root. `seed` is accepted for API parity but ignored — FGVC has fixed
+    canonical splits."""
+    return FGVCAircraft.auto_prepare(data_root, seed=seed)

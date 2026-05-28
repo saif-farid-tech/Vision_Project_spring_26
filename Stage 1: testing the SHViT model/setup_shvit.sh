@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup_shvit.sh — Full SHViT setup for Oxford Pets classification
+# setup_shvit.sh — Full SHViT setup for FGVC Aircraft classification
 # Run from: /home/user/Vision_Project_spring_26
 set -e
 
@@ -40,5 +40,5 @@ echo ""
 echo "=== Done! ==="
 echo "Next steps:"
 echo "  conda activate shvit"
-echo "  python prepare_oxford_pets.py       # download + organize Oxford Pets"
+echo "  python prepare_fgvc_aircraft.py       # download + organize FGVC Aircraft"
 echo "  python verify_model.py             # quick eval on 50 images"

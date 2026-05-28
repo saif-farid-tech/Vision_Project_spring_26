@@ -1,7 +1,7 @@
 """
 verify_model.py
 Loads SHViT-S4 from a local checkpoint and runs inference on a small
-subset of Oxford Pets validation images to confirm the model loads correctly.
+subset of FGVC Aircraft validation images to confirm the model loads correctly.
 
 Usage:
     python verify_model.py \\
@@ -12,7 +12,7 @@ Usage:
 
 The script prints per-image predictions and a summary timing.
 Top-1 predictions are ImageNet class indices, so expect ~zero accuracy vs.
-Oxford Pets labels — the point is just to confirm the model runs without errors.
+FGVC Aircraft labels — the point is just to confirm the model runs without errors.
 """
 
 import argparse
@@ -48,17 +48,33 @@ def get_transform(img_size: int = 224) -> transforms.Compose:
 
 
 def collect_images(ds_root: Path, n: int):
-    """Return up to n (path, class_name) pairs from Oxford Pets's flat
-    images/ folder. Breed is encoded in the filename
-    (<Breed>_<id>.jpg), so we recover it from there."""
-    items = []
+    """Return up to n (path, class_name) pairs from FGVC Aircraft's flat
+    images/ folder. Filenames are numeric image IDs (e.g. ``0034309.jpg``)
+    and the variant for each id lives in the split files, not the filename.
+    Look up the variant from ``images_variant_*.txt`` when available; fall
+    back to ``"unknown"`` otherwise (the verify step only needs the
+    inference path to run)."""
     image_dir = ds_root / "images"
     if not image_dir.exists():
-        return items
+        return []
+
+    id_to_variant: dict[str, str] = {}
+    for fname in ("images_variant_train.txt",
+                  "images_variant_val.txt",
+                  "images_variant_test.txt"):
+        path = ds_root / fname
+        if not path.exists():
+            continue
+        with open(path) as f:
+            for line in f:
+                parts = line.strip().split(" ")
+                if len(parts) >= 2:
+                    id_to_variant[parts[0]] = " ".join(parts[1:])
+
+    items = []
     for img_path in sorted(image_dir.glob("*.jpg")):
-        # Filenames look like "Abyssinian_1.jpg" -> breed = "Abyssinian".
-        breed = "_".join(img_path.stem.split("_")[:-1]) or "unknown"
-        items.append((img_path, breed))
+        variant = id_to_variant.get(img_path.stem, "unknown")
+        items.append((img_path, variant))
         if len(items) >= n:
             return items
     return items
@@ -71,8 +87,8 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, default=Path("weights/shvit_s4.pth"),
                         help="Path to shvit_s4.pth")
     parser.add_argument("--data-root", type=Path, default=Path("data"),
-                        help="Oxford Pets parent dir; expects "
-                             "<data-root>/oxford_pets/images/")
+                        help="FGVC Aircraft parent dir; expects "
+                             "<data-root>/fgvc_aircraft/images/")
     parser.add_argument("--num-images", type=int, default=50,
                         help="Number of images to run inference on")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -121,9 +137,9 @@ def main() -> None:
     # ------------------------------------------------------------------ #
     # 4. Collect images (auto-prepare dataset if missing)
     # ------------------------------------------------------------------ #
-    ds_root = args.data_root / "oxford_pets"
+    ds_root = args.data_root / "fgvc_aircraft"
     if not (ds_root / "images").exists():
-        print(f"[info] {ds_root}/images not found, preparing Oxford Pets first ...")
+        print(f"[info] {ds_root}/images not found, preparing FGVC Aircraft first ...")
         import splits  # noqa: E402
         splits.ensure_prepared(args.data_root)
 
@@ -160,7 +176,7 @@ def main() -> None:
           f"({elapsed / len(results) * 1000:.1f} ms/image)")
     print("\n[OK] Model loaded and ran inference without errors.")
     print("Note: top-1 predictions are ImageNet class indices — accuracy vs.")
-    print("Oxford Pets labels is expected to be low without fine-tuning.")
+    print("FGVC Aircraft labels is expected to be low without fine-tuning.")
 
 
 if __name__ == "__main__":
