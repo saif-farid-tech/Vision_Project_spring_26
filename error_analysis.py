@@ -1,6 +1,6 @@
 """
 error_analysis.py
-Detailed error analysis for SHViT-S4 on the Stanford Cars test set
+Detailed error analysis for SHViT-S4 on the Oxford Pets test set
 (Tip-Adapter split). Reads <results-dir>/shvit_s4/results.json and produces:
 
     confusion_top20.png         row-normalized heatmap, 20 worst classes (seaborn)
@@ -11,11 +11,11 @@ Detailed error analysis for SHViT-S4 on the Stanford Cars test set
 
 Usage:
     python error_analysis.py \\
-        --results-dir CV_Research_Paper_StanfordCars/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/results \\
+        --results-dir CV_Research_Paper_OxfordPets/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/results \\
         --data-root   data \\
         --shvit-dir   SHViT \\
-        --checkpoint  "CV_Research_Paper_StanfordCars/Stage 3: fine-tuning SHViT/shvit_s4/best.pth" \\
-        --output-dir  CV_Research_Paper_StanfordCars/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/error_analysis_outputs
+        --checkpoint  "CV_Research_Paper_OxfordPets/Stage 3: fine-tuning SHViT/shvit_s4/best.pth" \\
+        --output-dir  CV_Research_Paper_OxfordPets/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/error_analysis_outputs
 """
 
 import argparse
@@ -40,7 +40,7 @@ from augmentation import build_val_transform  # noqa: E402
 import splits  # noqa: E402
 
 
-NUM_CLASSES = 196  # Stanford Cars / CoOp split
+NUM_CLASSES = 37  # Oxford Pets / CoOp split
 N_WORST_HEATMAP = 20
 N_WORST_BARS = 15
 N_GRID_ROWS = 4
@@ -136,7 +136,7 @@ def plot_worst_15(per_class_acc, class_names, out_path: Path):
     ax.set_yticklabels(labels)
     ax.invert_yaxis()
     ax.set_xlabel("Per-class accuracy (%)")
-    ax.set_title(f"{N_WORST_BARS} worst-performing classes (SHViT-S4 on Stanford Cars)")
+    ax.set_title(f"{N_WORST_BARS} worst-performing classes (SHViT-S4 on Oxford Pets)")
     for i, v in enumerate(values):
         ax.text(v + 0.5, i, f"{v:.1f}", va="center", fontsize=9)
     ax.set_xlim(0, max(values) + 8)
@@ -181,7 +181,7 @@ def plot_misclassified_grid(args, all_preds, all_targets, class_names, device, t
         ax.set_xticks([]); ax.set_yticks([])
     for ax in axes.flat[len(sample):]:
         ax.set_visible(False)
-    fig.suptitle("Random misclassified test images (SHViT-S4, Stanford Cars)", fontsize=12)
+    fig.suptitle("Random misclassified test images (SHViT-S4, Oxford Pets)", fontsize=12)
     fig.tight_layout()
     fig.savefig(out_path, dpi=300, facecolor="white", bbox_inches="tight")
     plt.close(fig)
@@ -199,7 +199,7 @@ def write_summary(results, class_names, top_pairs, test_size, out_path: Path):
     best10 = order[::-1][:10]
 
     lines = [
-        "SHViT-S4 Error Analysis Summary (Stanford Cars)",
+        "SHViT-S4 Error Analysis Summary (Oxford Pets)",
         "=" * 48,
         "",
         "Overall:",
@@ -231,13 +231,13 @@ def write_summary(results, class_names, top_pairs, test_size, out_path: Path):
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--results-dir", type=Path,
-                   default=Path("CV_Research_Paper_StanfordCars/Stage 4: Benchmarking and Demo/analysis/results"))
+                   default=Path("CV_Research_Paper_OxfordPets/Stage 4: Benchmarking and Demo/analysis/results"))
     p.add_argument("--data-root",   type=Path, default=Path("data"))
     p.add_argument("--shvit-dir",   type=Path, default=_REPO_ROOT / "SHViT")
     p.add_argument("--checkpoint",  type=Path,
-                   default=Path("CV_Research_Paper_StanfordCars/Stage 3: fine-tuning SHViT/shvit_s4/best.pth"))
+                   default=Path("CV_Research_Paper_OxfordPets/Stage 3: fine-tuning SHViT/shvit_s4/best.pth"))
     p.add_argument("--output-dir",  type=Path,
-                   default=Path("CV_Research_Paper_StanfordCars/Stage 4: Benchmarking and Demo/analysis/error_analysis_outputs"))
+                   default=Path("CV_Research_Paper_OxfordPets/Stage 4: Benchmarking and Demo/analysis/error_analysis_outputs"))
     p.add_argument("--seed",        type=int,  default=0)
     return p.parse_args()
 
@@ -260,7 +260,7 @@ def main():
     all_preds = np.asarray(results["all_preds"])
     all_targets = np.asarray(results["all_targets"])
 
-    # ---- Class names from Stanford Cars test split ------------------------
+    # ---- Class names from Oxford Pets test split ------------------------
     splits.ensure_prepared(args.data_root)
     test_ds = splits.load_test(args.data_root, transform=build_val_transform())
     class_names = list(test_ds.classes)

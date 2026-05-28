@@ -1,17 +1,17 @@
 # Dataset
 data/
-stanford_cars_data/
-stanford_cars_local/
+oxford_pets_data/
+oxford_pets_local/
 
 # Model checkpoints
 checkpoints/
 weights/
 
-# Local copy of CV_Research_Paper_StanfordCars outputs.
+# Local copy of CV_Research_Paper_OxfordPets outputs.
 # Large artifacts (checkpoints, *.pth) are excluded from git; commit
 # selected analysis outputs (figures, results.json, etc.) explicitly.
-CV_Research_Paper_StanfordCars/**/best.pth
-CV_Research_Paper_StanfordCars/**/checkpoint_*.pth
+CV_Research_Paper_OxfordPets/**/best.pth
+CV_Research_Paper_OxfordPets/**/checkpoint_*.pth
 
 # Python
 __pycache__/

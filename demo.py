@@ -1,6 +1,6 @@
 """
 demo.py
-Single-image inference with SHViT-S4 fine-tuned on Stanford Cars.
+Single-image inference with SHViT-S4 fine-tuned on Oxford Pets.
 
 Loads the checkpoint, preprocesses the image with the same val transform
 used in training (resize + center-crop + CLIP normalize), prints top-5
@@ -8,7 +8,7 @@ predictions, and saves the image with the top prediction overlaid.
 
 Usage:
     python demo.py --image sample.jpg \\
-        --checkpoint "CV_Research_Paper_StanfordCars/Stage 3: fine-tuning SHViT/shvit_s4/best.pth" \\
+        --checkpoint "CV_Research_Paper_OxfordPets/Stage 3: fine-tuning SHViT/shvit_s4/best.pth" \\
         --shvit-dir  SHViT \\
         --data-root  data
 """
@@ -31,7 +31,7 @@ from augmentation import build_val_transform  # noqa: E402
 import splits  # noqa: E402
 
 
-NUM_CLASSES = 196  # Stanford Cars under the Tip-Adapter / CoOp split
+NUM_CLASSES = 37  # Oxford Pets under the Tip-Adapter / CoOp split
 
 
 def load_shvit_s4(shvit_dir: Path, checkpoint: Path, device):
@@ -56,9 +56,9 @@ def main():
     p.add_argument("--checkpoint", type=Path, required=True)
     p.add_argument("--shvit-dir",  type=Path, required=True)
     p.add_argument("--data-root",  type=Path, required=True,
-                   help="Stanford Cars parent dir (used to fetch the class names)")
+                   help="Oxford Pets parent dir (used to fetch the class names)")
     p.add_argument("--output",     type=Path,
-                   default=Path("CV_Research_Paper_StanfordCars/Stage 4: Benchmarking and Demo/analysis/demo_output/demo_output.png"))
+                   default=Path("CV_Research_Paper_OxfordPets/Stage 4: Benchmarking and Demo/analysis/demo_output/demo_output.png"))
     p.add_argument("--top-k",      type=int,  default=5)
     args = p.parse_args()
 

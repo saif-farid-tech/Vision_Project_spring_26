@@ -16,8 +16,8 @@ from timm.data.mixup import Mixup
 CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
 CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
 
-# Stanford Cars has 196 fine-grained car-model classes.
-NUM_CLASSES = 196
+# Oxford Pets has 37 breed classes (25 dog + 12 cat).
+NUM_CLASSES = 37
 
 
 def build_train_transform(img_size: int = 224):
