@@ -1,7 +1,10 @@
 # CV_Research_Paper_StanfordCars
 
-Output root for every script and notebook in this branch. The expected layout
-once the experiment has been run end-to-end:
+Here I uploaded all the outputs of all notebooks I ran, so that you can see the expected cell outputs.
+
+Google drive link for the models and results: https://drive.google.com/drive/folders/1K0IOcRrHSFZ2B4HfylFgLiQzCDj8svIP?usp=sharing
+
+This is the expected layout once the experiment has been run end-to-end:
 
 ```
 CV_Research_Paper_StanfordCars/
