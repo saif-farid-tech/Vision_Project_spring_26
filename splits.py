@@ -1,10 +1,9 @@
-"""splits.py — train/val/test loader for FGVC Aircraft.
+"""splits.py — train/val/test loader for SUN397 using the Tip-Adapter style
+split JSON (`split_zhou_SUN397.json`).
 
-Unlike the other dataset variants in this project, FGVC Aircraft ships its
-own canonical `images_variant_{train,val,test}.txt` split files, so there
-is no CoOp JSON split JSON involved. This module exposes the same API as
-the previous dataset variants so the rest of the codebase doesn't need to
-change:
+The CoOp / Tip-Adapter split bakes the train / val / test partition into a
+single JSON, so we don't need per-class count manifests. This module exposes
+the same API as the previous dataset variants:
 
     train_ds, val_ds = splits.load_split(
         data_root="data",
@@ -13,7 +12,7 @@ change:
     )
 
 `load_test` returns the held-out test split, and `ensure_prepared` triggers
-the download if needed.
+the download / split generation if needed.
 """
 
 from pathlib import Path
@@ -21,7 +20,7 @@ from typing import Optional, Tuple
 
 from torch.utils.data import Dataset
 
-from datasets.fgvc import FGVCAircraft
+from datasets.sun397 import SUN397
 from datasets.utils import DatasetWrapper
 
 
@@ -78,10 +77,10 @@ def _build(
     input_size: int,
     num_shots: int,
 ) -> Tuple[_TipDataset, _TipDataset, _TipDataset, list]:
-    """Construct the underlying Tip-Adapter FGVCAircraft instance and wrap
-    each split. Returned tuple: (train_full_or_fewshot, val, test, classnames).
+    """Construct the underlying Tip-Adapter SUN397 instance and wrap each
+    split. Returned tuple: (train_full_or_fewshot, val, test, classnames).
     """
-    ds = FGVCAircraft(root=str(data_root), num_shots=num_shots)
+    ds = SUN397(root=str(data_root), num_shots=num_shots)
     train_source = ds.train_x if num_shots > 0 else ds.train_full
 
     train_ds = _TipDataset(
@@ -107,7 +106,7 @@ def load_split(
     num_shots: int = -1,
     split_json: Optional[str] = None,  # ignored — kept for API compat
 ) -> Tuple[_TipDataset, _TipDataset]:
-    """Return (train_ds, val_ds) for FGVC Aircraft using the official split files."""
+    """Return (train_ds, val_ds) for SUN397 using the Tip-Adapter split."""
     train_ds, val_ds, _test_ds, _ = _build(
         data_root, train_transform, val_transform, val_transform,
         input_size=input_size, num_shots=num_shots,
@@ -146,7 +145,6 @@ def load_all(
 
 
 def ensure_prepared(data_root, seed: int = 1) -> Path:
-    """Trigger FGVC Aircraft download if needed and return the dataset
-    root. `seed` is accepted for API parity but ignored — FGVC has fixed
-    canonical splits."""
-    return FGVCAircraft.auto_prepare(data_root, seed=seed)
+    """Trigger SUN397 download / split generation if needed and return the
+    dataset root. Safe to call from any script."""
+    return SUN397.auto_prepare(data_root, seed=seed)

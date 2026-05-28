@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup_shvit.sh — Full SHViT setup for FGVC Aircraft classification
+# setup_shvit.sh — Full SHViT setup for SUN397 classification
 # Run from: /home/user/Vision_Project_spring_26
 set -e
 
@@ -40,5 +40,5 @@ echo ""
 echo "=== Done! ==="
 echo "Next steps:"
 echo "  conda activate shvit"
-echo "  python prepare_fgvc_aircraft.py       # download + organize FGVC Aircraft"
+echo "  python prepare_sun397.py       # download + organize SUN397"
 echo "  python verify_model.py             # quick eval on 50 images"

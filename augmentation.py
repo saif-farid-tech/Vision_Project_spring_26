@@ -16,8 +16,8 @@ from timm.data.mixup import Mixup
 CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
 CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
 
-# FGVC Aircraft has 100 fine-grained aircraft variant classes.
-NUM_CLASSES = 100
+# SUN397 has 397 scene categories.
+NUM_CLASSES = 397
 
 
 def build_train_transform(img_size: int = 224):

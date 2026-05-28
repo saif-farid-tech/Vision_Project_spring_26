@@ -1,6 +1,6 @@
 """
 eda.py
-FGVC Aircraft EDA visualizations for the report's data section.
+SUN397 EDA visualizations for the report's data section.
 
 Outputs (under --output-dir):
     eda_samples.png            5x5 grid of random training images + labels
@@ -10,7 +10,7 @@ Outputs (under --output-dir):
 
 Usage:
     python eda.py --data-root data \\
-        --output-dir CV_Research_Paper_FGVCAircraft/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/eda_outputs
+        --output-dir CV_Research_Paper_SUN397/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/eda_outputs
 """
 
 import argparse
@@ -29,13 +29,13 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 import splits  # noqa: E402
-from datasets.fgvc_aircraft import FGVCAircraft  # noqa: E402
+from datasets.sun397 import SUN397  # noqa: E402
 
 
 def load_datasets(data_root: Path):
     """Returns (train_items, test_items, classnames) from the Tip-Adapter split."""
     splits.ensure_prepared(data_root)
-    ds = FGVCAircraft(root=str(data_root), num_shots=-1)
+    ds = SUN397(root=str(data_root), num_shots=-1)
     return ds.train_full, ds.test, ds.classnames
 
 
@@ -57,7 +57,7 @@ def plot_sample_grid(items, classes, out_path: Path, n_rows=5, n_cols=5):
         ax.set_title(classes[item.label].replace("_", " "), fontsize=8)
         ax.set_xticks([])
         ax.set_yticks([])
-    fig.suptitle("FGVC Aircraft random training samples", fontsize=12)
+    fig.suptitle("SUN397 random training samples", fontsize=12)
     fig.tight_layout()
     fig.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
@@ -95,7 +95,7 @@ def plot_class_distribution(train, test, classes, out_path: Path):
     ax.set_xticklabels([classes[i].replace("_", " ") for i in order],
                        rotation=90, fontsize=6)
     ax.set_ylabel("Image count")
-    ax.set_title("FGVC Aircraft class distribution (alphabetical)")
+    ax.set_title("SUN397 class distribution (alphabetical)")
     ax.legend()
     fig.tight_layout()
     fig.savefig(out_path, dpi=300, bbox_inches="tight")
@@ -113,7 +113,7 @@ def write_summary(train, test, sizes, classes, out_path: Path):
     heights = [h for _, h in sizes]
 
     lines = [
-        "FGVC Aircraft EDA Summary",
+        "SUN397 EDA Summary",
         "=" * 40,
         f"Total images        : {len(train) + len(test):,}",
         f"  train             : {len(train):,}",
@@ -149,7 +149,7 @@ def main():
     p.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("CV_Research_Paper_FGVCAircraft/Stage 4: Benchmarking and Demo/analysis/eda_outputs"),
+        default=Path("CV_Research_Paper_SUN397/Stage 4: Benchmarking and Demo/analysis/eda_outputs"),
     )
     p.add_argument("--size-sample", type=int, default=1000,
                    help="number of train images sampled for the size histograms")

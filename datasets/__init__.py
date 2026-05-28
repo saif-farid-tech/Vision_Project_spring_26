@@ -2,10 +2,8 @@
 
 Source: https://github.com/gaopengcuhk/Tip-Adapter/tree/main/datasets
 
-Vendored locally so the FGVC Aircraft experiment can use the same Datum /
-DatasetBase / DatasetWrapper abstractions. Unlike the other dataset variants
-in this project, FGVC Aircraft ships its own canonical train/val/test split
-files, so there is no CoOp JSON split involved.
+Vendored locally so the SUN397 experiment can use the same Datum /
+DatasetBase / DatasetWrapper abstractions and the CoOp-style split JSON.
 """
 
 from .utils import (
@@ -18,7 +16,8 @@ from .utils import (
     write_json,
     listdir_nohidden,
 )
-from .fgvc import FGVCAircraft
+from .sun397 import SUN397
+from .oxford_pets import OxfordPets
 
 __all__ = [
     "Datum",
@@ -29,5 +28,6 @@ __all__ = [
     "read_json",
     "write_json",
     "listdir_nohidden",
-    "FGVCAircraft",
+    "SUN397",
+    "OxfordPets",
 ]
