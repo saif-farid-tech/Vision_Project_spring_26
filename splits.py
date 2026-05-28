@@ -1,5 +1,5 @@
-"""splits.py — train/val/test loader for SUN397 using the Tip-Adapter style
-split JSON (`split_zhou_SUN397.json`).
+"""splits.py — train/val/test loader for DTD (Describable Textures) using
+the Tip-Adapter style split JSON (`split_zhou_DescribableTextures.json`).
 
 The CoOp / Tip-Adapter split bakes the train / val / test partition into a
 single JSON, so we don't need per-class count manifests. This module exposes
@@ -20,7 +20,7 @@ from typing import Optional, Tuple
 
 from torch.utils.data import Dataset
 
-from datasets.sun397 import SUN397
+from datasets.dtd import DescribableTextures
 from datasets.utils import DatasetWrapper
 
 
@@ -77,10 +77,10 @@ def _build(
     input_size: int,
     num_shots: int,
 ) -> Tuple[_TipDataset, _TipDataset, _TipDataset, list]:
-    """Construct the underlying Tip-Adapter SUN397 instance and wrap each
-    split. Returned tuple: (train_full_or_fewshot, val, test, classnames).
+    """Construct the underlying Tip-Adapter DescribableTextures instance and
+    wrap each split. Returned tuple: (train_full_or_fewshot, val, test, classnames).
     """
-    ds = SUN397(root=str(data_root), num_shots=num_shots)
+    ds = DescribableTextures(root=str(data_root), num_shots=num_shots)
     train_source = ds.train_x if num_shots > 0 else ds.train_full
 
     train_ds = _TipDataset(
@@ -106,7 +106,7 @@ def load_split(
     num_shots: int = -1,
     split_json: Optional[str] = None,  # ignored — kept for API compat
 ) -> Tuple[_TipDataset, _TipDataset]:
-    """Return (train_ds, val_ds) for SUN397 using the Tip-Adapter split."""
+    """Return (train_ds, val_ds) for DTD using the Tip-Adapter split."""
     train_ds, val_ds, _test_ds, _ = _build(
         data_root, train_transform, val_transform, val_transform,
         input_size=input_size, num_shots=num_shots,
@@ -145,6 +145,6 @@ def load_all(
 
 
 def ensure_prepared(data_root, seed: int = 1) -> Path:
-    """Trigger SUN397 download / split generation if needed and return the
+    """Trigger DTD download / split generation if needed and return the
     dataset root. Safe to call from any script."""
-    return SUN397.auto_prepare(data_root, seed=seed)
+    return DescribableTextures.auto_prepare(data_root, seed=seed)

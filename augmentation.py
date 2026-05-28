@@ -16,8 +16,8 @@ from timm.data.mixup import Mixup
 CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
 CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
 
-# SUN397 has 397 scene categories.
-NUM_CLASSES = 397
+# DTD (Describable Textures Dataset) has 47 texture categories.
+NUM_CLASSES = 47
 
 
 def build_train_transform(img_size: int = 224):

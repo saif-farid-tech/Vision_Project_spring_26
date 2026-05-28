@@ -2,7 +2,7 @@
 https://github.com/gaopengcuhk/Tip-Adapter/blob/main/datasets/oxford_pets.py
 
 We only use OxfordPets.read_split / save_split / split_trainval as static
-helpers for the SUN397 loader (the OxfordPets class itself is not used by
+helpers for the DTD loader (the OxfordPets class itself is not used by
 this branch).
 """
 

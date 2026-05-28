@@ -1,7 +1,7 @@
 """
 verify_model.py
 Loads SHViT-S4 from a local checkpoint and runs inference on a small
-subset of SUN397 validation images to confirm the model loads correctly.
+subset of DTD validation images to confirm the model loads correctly.
 
 Usage:
     python verify_model.py \\
@@ -12,7 +12,7 @@ Usage:
 
 The script prints per-image predictions and a summary timing.
 Top-1 predictions are ImageNet class indices, so expect ~zero accuracy vs.
-SUN397 labels — the point is just to confirm the model runs without errors.
+DTD labels — the point is just to confirm the model runs without errors.
 """
 
 import argparse
@@ -48,32 +48,21 @@ def get_transform(img_size: int = 224) -> transforms.Compose:
 
 
 def collect_images(ds_root: Path, n: int):
-    """Return up to n (path, class_name) pairs from SUN397's nested
-    SUN397/<letter>/<scene>/[indoor|outdoor]/<image>.jpg tree. The scene
-    name (and its optional indoor/outdoor sub-class) is recovered from the
-    directory path."""
-    image_root = ds_root / "SUN397"
+    """Return up to n (path, class_name) pairs from DTD's
+    images/<category>/<image>.jpg layout. Class name comes from the
+    folder name."""
+    image_root = ds_root / "images"
     if not image_root.exists():
         return []
 
     items = []
-    for letter_dir in sorted(image_root.iterdir()):
-        if not letter_dir.is_dir() or len(letter_dir.name) != 1:
+    for cls_dir in sorted(image_root.iterdir()):
+        if not cls_dir.is_dir():
             continue
-        for scene_dir in sorted(letter_dir.iterdir()):
-            if not scene_dir.is_dir():
-                continue
-            subscenes = [p for p in scene_dir.iterdir() if p.is_dir()]
-            class_dirs = subscenes if subscenes else [scene_dir]
-            for cls_dir in class_dirs:
-                # Classname is "<scene>" or "<sub> <scene>" (Tip-Adapter
-                # reverses path components so indoor/outdoor comes first).
-                rel = cls_dir.relative_to(image_root).as_posix().split("/")[1:]
-                classname = " ".join(p.replace("_", " ") for p in rel[::-1])
-                for img_path in sorted(cls_dir.glob("*.jpg")):
-                    items.append((img_path, classname))
-                    if len(items) >= n:
-                        return items
+        for img_path in sorted(cls_dir.glob("*.jpg")):
+            items.append((img_path, cls_dir.name))
+            if len(items) >= n:
+                return items
     return items
 
 
@@ -84,8 +73,8 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, default=Path("weights/shvit_s4.pth"),
                         help="Path to shvit_s4.pth")
     parser.add_argument("--data-root", type=Path, default=Path("data"),
-                        help="SUN397 parent dir; expects "
-                             "<data-root>/sun397/SUN397/<letter>/<scene>/...")
+                        help="DTD parent dir; expects "
+                             "<data-root>/dtd/images/<category>/...")
     parser.add_argument("--num-images", type=int, default=50,
                         help="Number of images to run inference on")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -134,15 +123,15 @@ def main() -> None:
     # ------------------------------------------------------------------ #
     # 4. Collect images (auto-prepare dataset if missing)
     # ------------------------------------------------------------------ #
-    ds_root = args.data_root / "sun397"
-    if not (ds_root / "SUN397").exists():
-        print(f"[info] {ds_root}/SUN397 not found, preparing SUN397 first ...")
+    ds_root = args.data_root / "dtd"
+    if not (ds_root / "images").exists():
+        print(f"[info] {ds_root}/images not found, preparing DTD first ...")
         import splits  # noqa: E402
         splits.ensure_prepared(args.data_root)
 
     items = collect_images(ds_root, args.num_images)
     if not items:
-        sys.exit(f"[ERROR] No .jpg images found under {ds_root}/SUN397")
+        sys.exit(f"[ERROR] No .jpg images found under {ds_root}/images")
 
     print(f"\nRunning inference on {len(items)} images (device={args.device}) ...")
     transform = get_transform()
@@ -173,7 +162,7 @@ def main() -> None:
           f"({elapsed / len(results) * 1000:.1f} ms/image)")
     print("\n[OK] Model loaded and ran inference without errors.")
     print("Note: top-1 predictions are ImageNet class indices — accuracy vs.")
-    print("SUN397 labels is expected to be low without fine-tuning.")
+    print("DTD labels is expected to be low without fine-tuning.")
 
 
 if __name__ == "__main__":

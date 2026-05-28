@@ -1,10 +1,10 @@
-# CV_Research_Paper_SUN397
+# CV_Research_Paper_DTD
 
 Output root for every script and notebook in this branch. The expected layout
 once the experiment has been run end-to-end:
 
 ```
-CV_Research_Paper_SUN397/
+CV_Research_Paper_DTD/
 ├── Stage 2: baseline models/
 │   ├── resnet50/{training_log.csv, best.pth}
 │   └── mobilenet_v2/{training_log.csv, best.pth}
