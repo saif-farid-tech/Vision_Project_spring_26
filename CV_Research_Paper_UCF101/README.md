@@ -17,7 +17,7 @@ CV_Research_Paper_UCF101/
 │   ├── shvit_s3/{training_log.csv, best.pth, checkpoint_*.pth}
 │   └── shvit_s4/{training_log.csv, best.pth, checkpoint_*.pth}
 └── Stage 4: Benchmarking and Demo/
-    └── analysis/
+    └── CV_Research_Paper_UCF101_analysis.zip/
         ├── eda_outputs/             (eda.py)
         ├── results/                 (evaluate_all.py — per-model results.json + tables)
         ├── figures/                 (make_figures.py — training curves, accuracy bars, …)
