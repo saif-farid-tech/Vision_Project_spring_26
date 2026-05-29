@@ -111,17 +111,22 @@ class SUN397(DatasetBase):
     def _candidate_image_urls() -> list:
         """Ordered list of URLs to try for the SUN397 image archive.
 
-        The upstream torchvision URL is plain ``http://`` and the Princeton
-        host is frequently unreachable over HTTP (it now serves over HTTPS),
-        which is the usual reason the download "just fails". We therefore try
-        the HTTPS URL first, allow an override via the ``SUN397_URL``
-        environment variable, and keep the original HTTP URL as a last resort.
+        The upstream torchvision URL (``http://vision.princeton.edu/...``) now
+        returns 404 — the official tarball was removed from that host, which is
+        why ``download=True`` "just fails". We therefore try the HuggingFace
+        ``dpdl-benchmark/sun397`` mirror first (a byte-identical copy, so the
+        original MD5 still matches), allow an override via the ``SUN397_URL``
+        environment variable, and keep the (now usually dead) Princeton URLs as
+        last-resort fallbacks.
         """
         urls = []
         env_url = os.environ.get("SUN397_URL")
         if env_url:
             urls.append(env_url)
         urls += [
+            # HuggingFace mirror of the original SUN397.tar.gz (works as of
+            # 2026; the official Princeton host returns 404).
+            "https://huggingface.co/datasets/dpdl-benchmark/sun397/resolve/main/SUN397.tar.gz",
             "https://vision.princeton.edu/projects/2010/SUN/SUN397.tar.gz",
             "http://vision.princeton.edu/projects/2010/SUN/SUN397.tar.gz",
         ]
