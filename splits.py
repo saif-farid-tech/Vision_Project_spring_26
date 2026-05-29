@@ -1,5 +1,5 @@
-"""splits.py — train/val/test loader for EuroSAT using the Tip-Adapter
-style split JSON (`split_zhou_EuroSAT.json`).
+"""splits.py — train/val/test loader for UCF101 using the Tip-Adapter
+style split JSON (`split_zhou_UCF101.json`).
 
 The CoOp / Tip-Adapter split bakes the train / val / test partition into a
 single JSON, so we don't need per-class count manifests. This module exposes
@@ -13,6 +13,10 @@ the same API as the previous dataset variants:
 
 `load_test` returns the held-out test split, and `ensure_prepared` triggers
 the download / split generation if needed.
+
+UCF101 is a video-action benchmark; CoOp / Tip-Adapter use one mid-frame
+JPG per clip as the still-image input — see `datasets/ucf101.py` for
+details on the on-disk layout and the gdown-driven preparation step.
 """
 
 from pathlib import Path
@@ -20,7 +24,7 @@ from typing import Optional, Tuple
 
 from torch.utils.data import Dataset
 
-from datasets.eurosat import EuroSAT
+from datasets.ucf101 import UCF101
 from datasets.utils import DatasetWrapper
 
 
@@ -77,10 +81,10 @@ def _build(
     input_size: int,
     num_shots: int,
 ) -> Tuple[_TipDataset, _TipDataset, _TipDataset, list]:
-    """Construct the underlying Tip-Adapter EuroSAT instance and wrap each
+    """Construct the underlying Tip-Adapter UCF101 instance and wrap each
     split. Returned tuple: (train_full_or_fewshot, val, test, classnames).
     """
-    ds = EuroSAT(root=str(data_root), num_shots=num_shots)
+    ds = UCF101(root=str(data_root), num_shots=num_shots)
     train_source = ds.train_x if num_shots > 0 else ds.train_full
 
     train_ds = _TipDataset(
@@ -106,7 +110,7 @@ def load_split(
     num_shots: int = -1,
     split_json: Optional[str] = None,  # ignored — kept for API compat
 ) -> Tuple[_TipDataset, _TipDataset]:
-    """Return (train_ds, val_ds) for EuroSAT using the Tip-Adapter split."""
+    """Return (train_ds, val_ds) for UCF101 using the Tip-Adapter split."""
     train_ds, val_ds, _test_ds, _ = _build(
         data_root, train_transform, val_transform, val_transform,
         input_size=input_size, num_shots=num_shots,
@@ -145,6 +149,6 @@ def load_all(
 
 
 def ensure_prepared(data_root, seed: int = 1) -> Path:
-    """Trigger EuroSAT download / split generation if needed and return the
+    """Trigger UCF101 download / split generation if needed and return the
     dataset root. Safe to call from any script."""
-    return EuroSAT.auto_prepare(data_root, seed=seed)
+    return UCF101.auto_prepare(data_root, seed=seed)

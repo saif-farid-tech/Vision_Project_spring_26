@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup_shvit.sh — Full SHViT setup for EuroSAT classification
+# setup_shvit.sh — Full SHViT setup for UCF101 classification
 # Run from: /home/user/Vision_Project_spring_26
 set -e
 
@@ -40,5 +40,5 @@ echo ""
 echo "=== Done! ==="
 echo "Next steps:"
 echo "  conda activate shvit"
-echo "  python prepare_eurosat.py       # download + organize EuroSAT"
+echo "  python prepare_ucf101.py       # download + organize UCF101"
 echo "  python verify_model.py             # quick eval on 50 images"

@@ -2,7 +2,7 @@
 
 Source: https://github.com/gaopengcuhk/Tip-Adapter/tree/main/datasets
 
-Vendored locally so the EuroSAT experiment can use the same Datum /
+Vendored locally so the UCF101 experiment can use the same Datum /
 DatasetBase / DatasetWrapper abstractions and the CoOp-style split JSON.
 """
 
@@ -16,7 +16,7 @@ from .utils import (
     write_json,
     listdir_nohidden,
 )
-from .eurosat import EuroSAT
+from .ucf101 import UCF101
 from .oxford_pets import OxfordPets
 
 __all__ = [
@@ -28,6 +28,6 @@ __all__ = [
     "read_json",
     "write_json",
     "listdir_nohidden",
-    "EuroSAT",
+    "UCF101",
     "OxfordPets",
 ]

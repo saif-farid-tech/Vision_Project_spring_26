@@ -1,7 +1,7 @@
 """
-finetune_shvit_eurosat.py
+finetune_shvit_ucf101.py
 
-Single-GPU wrapper for fine-tuning SHViT (S1..S4) on EuroSAT.
+Single-GPU wrapper for fine-tuning SHViT (S1..S4) on UCF101.
 
 Design choices that match the original SHViT paper / engine.py:
   - Augmentation: defined in augmentation.py at the repo root
@@ -16,11 +16,11 @@ Design choices that match the original SHViT paper / engine.py:
   - LR is used directly — no linear world-size scaling since world_size=1.
 
 Usage:
-    python finetune_shvit_eurosat.py \\
+    python finetune_shvit_ucf101.py \\
         --shvit-dir  /path/to/SHViT \\
         --finetune   /path/to/shvit_s4.pth \\
         --data-root  /path/to/data \\
-        --output-dir "CV_Research_Paper_EuroSAT/Stage 3: fine-tuning SHViT/shvit_s4" \\
+        --output-dir "CV_Research_Paper_UCF101/Stage 3: fine-tuning SHViT/shvit_s4" \\
         --epochs 30
 
 Outputs:
@@ -53,7 +53,7 @@ from augmentation import build_train_transform, build_val_transform, build_mixup
 import splits                                                                         # noqa: E402
 
 
-NUM_CLASSES = 10  # EuroSAT under the Tip-Adapter / CoOp split
+NUM_CLASSES = 101  # UCF101 under the Tip-Adapter / CoOp split
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ NUM_CLASSES = 10  # EuroSAT under the Tip-Adapter / CoOp split
 # ---------------------------------------------------------------------------
 
 def get_args():
-    p = argparse.ArgumentParser("SHViT EuroSAT fine-tuning (single GPU)")
+    p = argparse.ArgumentParser("SHViT UCF101 fine-tuning (single GPU)")
 
     # Paths
     p.add_argument("--shvit-dir",   type=Path, default=Path("SHViT"))
@@ -69,7 +69,7 @@ def get_args():
                    help="ImageNet pretrained checkpoint to start from")
     p.add_argument("--data-root",   type=Path, default=Path("data"))
     p.add_argument("--output-dir",  type=Path,
-                   default=Path("CV_Research_Paper_EuroSAT/Stage 3: fine-tuning SHViT/shvit_s4"))
+                   default=Path("CV_Research_Paper_UCF101/Stage 3: fine-tuning SHViT/shvit_s4"))
     p.add_argument("--resume",      type=Path, default=None,
                    help="Resume a previous fine-tuning run from a checkpoint_N.pth")
 
@@ -112,7 +112,7 @@ def build_loaders(args):
         val_transform=build_val_transform(img_size=args.input_size),
         input_size=args.input_size,
     )
-    print(f"EuroSAT split: {len(train_ds):,} train  {len(val_ds):,} val")
+    print(f"UCF101 split: {len(train_ds):,} train  {len(val_ds):,} val")
     train_loader = torch.utils.data.DataLoader(
         train_ds, batch_size=args.batch_size, shuffle=True,
         num_workers=args.num_workers, pin_memory=True, drop_last=True,

@@ -1,7 +1,7 @@
 """
 verify_model.py
 Loads SHViT-S4 from a local checkpoint and runs inference on a small
-subset of EuroSAT validation images to confirm the model loads correctly.
+subset of UCF101 validation images to confirm the model loads correctly.
 
 Usage:
     python verify_model.py \\
@@ -12,7 +12,7 @@ Usage:
 
 The script prints per-image predictions and a summary timing.
 Top-1 predictions are ImageNet class indices, so expect ~zero accuracy vs.
-EuroSAT labels — the point is just to confirm the model runs without errors.
+UCF101 labels — the point is just to confirm the model runs without errors.
 """
 
 import argparse
@@ -48,10 +48,10 @@ def get_transform(img_size: int = 224) -> transforms.Compose:
 
 
 def collect_images(ds_root: Path, n: int):
-    """Return up to n (path, class_name) pairs from EuroSAT's
-    2750/<RawClass>/<image>.jpg layout. Class name comes from the
-    folder name (e.g. ``AnnualCrop``, ``SeaLake``)."""
-    image_root = ds_root / "2750"
+    """Return up to n (path, class_name) pairs from UCF101's mid-frame
+    UCF-101-midframes/<Action>/<image>.jpg layout. Class name comes from
+    the folder name (e.g. ``Apply_Eye_Makeup``, ``Yo_Yo``)."""
+    image_root = ds_root / "UCF-101-midframes"
     if not image_root.exists():
         return []
 
@@ -73,8 +73,8 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, default=Path("weights/shvit_s4.pth"),
                         help="Path to shvit_s4.pth")
     parser.add_argument("--data-root", type=Path, default=Path("data"),
-                        help="EuroSAT parent dir; expects "
-                             "<data-root>/eurosat/2750/<category>/...")
+                        help="UCF101 parent dir; expects "
+                             "<data-root>/ucf101/UCF-101-midframes/<category>/...")
     parser.add_argument("--num-images", type=int, default=50,
                         help="Number of images to run inference on")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -123,15 +123,15 @@ def main() -> None:
     # ------------------------------------------------------------------ #
     # 4. Collect images (auto-prepare dataset if missing)
     # ------------------------------------------------------------------ #
-    ds_root = args.data_root / "eurosat"
-    if not (ds_root / "2750").exists():
-        print(f"[info] {ds_root}/2750 not found, preparing EuroSAT first ...")
+    ds_root = args.data_root / "ucf101"
+    if not (ds_root / "UCF-101-midframes").exists():
+        print(f"[info] {ds_root}/UCF-101-midframes not found, preparing UCF101 first ...")
         import splits  # noqa: E402
         splits.ensure_prepared(args.data_root)
 
     items = collect_images(ds_root, args.num_images)
     if not items:
-        sys.exit(f"[ERROR] No .jpg images found under {ds_root}/2750")
+        sys.exit(f"[ERROR] No .jpg images found under {ds_root}/UCF-101-midframes")
 
     print(f"\nRunning inference on {len(items)} images (device={args.device}) ...")
     transform = get_transform()
@@ -162,7 +162,7 @@ def main() -> None:
           f"({elapsed / len(results) * 1000:.1f} ms/image)")
     print("\n[OK] Model loaded and ran inference without errors.")
     print("Note: top-1 predictions are ImageNet class indices — accuracy vs.")
-    print("EuroSAT labels is expected to be low without fine-tuning.")
+    print("UCF101 labels is expected to be low without fine-tuning.")
 
 
 if __name__ == "__main__":
