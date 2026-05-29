@@ -2,8 +2,9 @@
 https://github.com/gaopengcuhk/Tip-Adapter/blob/main/datasets/sun397.py
 
 Adds an `auto_prepare` classmethod that:
-  * triggers a `torchvision.datasets.SUN397` download (gives us the SUN397
-    image tree with letter-prefixed subdirectories),
+  * downloads + extracts the SUN397 image archive (HTTPS Princeton URL first,
+    falling back to plain HTTP and to an `SUN397_URL` override; tolerates an
+    upstream MD5 mismatch) to get the letter-prefixed image tree,
   * re-shapes the unpack into the Tip-Adapter layout
     `<root>/sun397/SUN397/<letter>/<scene>/<image>.jpg`,
   * tries to fetch the official CoOp split JSON via gdown, and
@@ -107,28 +108,94 @@ class SUN397(DatasetBase):
         return False
 
     @staticmethod
-    def _download_images(root: Path):
-        """Use torchvision.datasets.SUN397 to handle the tar download, then
-        re-shape the unpacked layout into Tip-Adapter's expected one.
+    def _candidate_image_urls() -> list:
+        """Ordered list of URLs to try for the SUN397 image archive.
 
-        torchvision unpacks to:
+        The upstream torchvision URL is plain ``http://`` and the Princeton
+        host is frequently unreachable over HTTP (it now serves over HTTPS),
+        which is the usual reason the download "just fails". We therefore try
+        the HTTPS URL first, allow an override via the ``SUN397_URL``
+        environment variable, and keep the original HTTP URL as a last resort.
+        """
+        urls = []
+        env_url = os.environ.get("SUN397_URL")
+        if env_url:
+            urls.append(env_url)
+        urls += [
+            "https://vision.princeton.edu/projects/2010/SUN/SUN397.tar.gz",
+            "http://vision.princeton.edu/projects/2010/SUN/SUN397.tar.gz",
+        ]
+        # De-duplicate while preserving order.
+        seen, out = set(), []
+        for u in urls:
+            if u not in seen:
+                seen.add(u)
+                out.append(u)
+        return out
+
+    @staticmethod
+    def _download_images(root: Path):
+        """Download and extract the SUN397 image archive, then re-shape the
+        unpacked layout into Tip-Adapter's expected one.
+
+        The archive unpacks to:
             <root>/SUN397/<letter>/<scene>/<image>.jpg
-            <root>/ClassName.txt
+            <root>/SUN397/ClassName.txt
         We move that into:
             <root>/sun397/SUN397/<letter>/<scene>/<image>.jpg
+
+        Unlike a single ``torchvision.datasets.SUN397(download=True)`` call,
+        this tries multiple URLs (HTTPS first), and falls back to skipping the
+        MD5 verification if the checksum mismatches (the upstream tarball has
+        changed hashes before), so a flaky official host fails loudly with an
+        actionable message rather than silently producing an empty split.
         """
         import torchvision.datasets as tv_datasets
-
-        print(f"[sun397] downloading SUN397 via torchvision into {root} ...")
-        try:
-            tv_datasets.SUN397(root=str(root), download=True)
-        except Exception as exc:
-            print(f"[sun397] torchvision SUN397 download failed: {exc}")
+        from torchvision.datasets.utils import download_and_extract_archive
 
         tv_root = root / "SUN397"
         tip_root = root / "sun397" / "SUN397"
-        if not tv_root.exists():
-            return
+
+        # Already unpacked (e.g. a previous interrupted run)? Skip download.
+        if not (tv_root.exists() and SUN397._has_class_tree(tv_root)):
+            expected_md5 = getattr(tv_datasets.SUN397, "_DATASET_MD5", None)
+            last_exc = None
+            for url in SUN397._candidate_image_urls():
+                for check_md5 in (expected_md5, None):
+                    if check_md5 is None and expected_md5 is not None:
+                        print("[sun397] retrying download without MD5 "
+                              "verification (checksum mismatch) ...")
+                    try:
+                        print(f"[sun397] downloading SUN397 archive from {url} "
+                              f"into {root} (this is ~37 GB, may take a while) ...")
+                        download_and_extract_archive(
+                            url, download_root=str(root), md5=check_md5
+                        )
+                        last_exc = None
+                        break
+                    except Exception as exc:
+                        last_exc = exc
+                        print(f"[sun397] download from {url} failed: {exc}")
+                        # Only the md5-off retry helps for checksum errors; for
+                        # anything else move on to the next URL.
+                        msg = str(exc).lower()
+                        if "md5" not in msg and "match" not in msg:
+                            break
+                if tv_root.exists() and SUN397._has_class_tree(tv_root):
+                    last_exc = None
+                    break
+
+            if not (tv_root.exists() and SUN397._has_class_tree(tv_root)):
+                raise RuntimeError(
+                    "[sun397] could not download/extract the SUN397 images.\n"
+                    f"  Tried: {SUN397._candidate_image_urls()}\n"
+                    f"  Last error: {last_exc}\n"
+                    "  Fix: ensure outbound network access to the host, or "
+                    "download SUN397.tar.gz manually and either set the "
+                    "SUN397_URL env var to a reachable mirror, or extract it so "
+                    f"that '{tv_root}/<letter>/<scene>/<image>.jpg' exists, then "
+                    "re-run."
+                )
 
         tip_root.parent.mkdir(parents=True, exist_ok=True)
         if tip_root.exists() and SUN397._has_class_tree(tip_root):
@@ -172,6 +239,13 @@ class SUN397(DatasetBase):
         components (e.g. `/a/airfield` -> "airfield", `/a/airport_terminal`
         -> "airport terminal", `/c/canyon/indoor` -> "indoor canyon").
         """
+        if not image_dir.exists():
+            raise RuntimeError(
+                f"[sun397] cannot generate a split: image directory "
+                f"'{image_dir}' does not exist. The SUN397 images must be "
+                "downloaded/extracted first (see SUN397._download_images)."
+            )
+
         print(f"[sun397] generating deterministic split (seed={seed})")
 
         # Discover all class folders (deepest level that holds images).

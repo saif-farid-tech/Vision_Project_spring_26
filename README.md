@@ -40,9 +40,15 @@ Data preprocessing details:
   …, `y` — with scene-name subfolders and, for some scenes, an extra
   `indoor/outdoor` nesting). The split JSON stores image paths relative to
   `<data-root>/sun397/SUN397/`.
-- Download: `torchvision.datasets.SUN397` fetches and extracts the upstream
-  archive; the prep script re-shapes the unpack into the Tip-Adapter style
-  layout above.
+- Download: the prep script fetches and extracts the upstream SUN397 archive
+  (HTTPS Princeton URL first, with the plain-HTTP URL as a fallback), then
+  re-shapes the unpack into the Tip-Adapter style layout above. If the
+  official host is unreachable, point it at a reachable mirror with
+  `SUN397_URL=<url> python prepare_sun397.py --root data`, or download
+  `SUN397.tar.gz` manually and extract it so that
+  `<data-root>/sun397/SUN397/<letter>/<scene>/<image>.jpg` exists before
+  re-running. A checksum mismatch on the upstream tarball is tolerated
+  (the download is retried without MD5 verification).
 - Normalization: CLIP statistics
   `mean=(0.48145466, 0.4578275, 0.40821073)`,
   `std=(0.26862954, 0.26130258, 0.27577711)`.
