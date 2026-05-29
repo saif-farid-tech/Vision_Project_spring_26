@@ -233,21 +233,69 @@ class SUN397(DatasetBase):
         This is used when the tarball mirrors are unreachable (the official
         Princeton URL was removed and now 404s). The HF datasets are the
         reliable, canonical source for SUN397 today.
-        """
-        try:
-            from datasets import load_dataset
-            from datasets import Image as HFImage
-        except ImportError:
-            print("[sun397] `datasets` not installed; attempting "
-                  "`pip install datasets` ...")
-            import subprocess
-            import sys
-            subprocess.check_call(
-                [sys.executable, "-m", "pip", "install", "-q", "datasets"]
-            )
-            from datasets import load_dataset
-            from datasets import Image as HFImage
 
+        Note: this repo ships a package literally named ``datasets`` (this
+        very module lives in it), which shadows the HuggingFace ``datasets``
+        library on ``sys.path``. We temporarily hide the vendored package so
+        the real library can be imported, then restore it.
+        """
+        import importlib
+        import subprocess
+        import sys as _sys
+
+        vendored_paths = [
+            p for p in list(_sys.path)
+            if os.path.isfile(os.path.join(p or os.getcwd(),
+                                           "datasets", "sun397.py"))
+        ]
+        saved_modules = {
+            k: _sys.modules.pop(k) for k in list(_sys.modules)
+            if k == "datasets" or k.startswith("datasets.")
+        }
+        for p in vendored_paths:
+            _sys.path.remove(p)
+        importlib.invalidate_caches()
+        try:
+            try:
+                hfds = importlib.import_module("datasets")
+            except ModuleNotFoundError:
+                hfds = None
+            if hfds is None or not hasattr(hfds, "load_dataset"):
+                print("[sun397] installing the HuggingFace `datasets` "
+                      "library ...")
+                subprocess.check_call(
+                    [_sys.executable, "-m", "pip", "install", "-q", "datasets"]
+                )
+                for k in [k for k in list(_sys.modules)
+                          if (k == "datasets" or k.startswith("datasets."))
+                          and k not in saved_modules]:
+                    del _sys.modules[k]
+                importlib.invalidate_caches()
+                hfds = importlib.import_module("datasets")
+            if not hasattr(hfds, "load_dataset"):
+                raise RuntimeError(
+                    "[sun397] could not import the HuggingFace `datasets` "
+                    "library — it is shadowed by the vendored datasets/ "
+                    "package and the workaround failed. Run prepare from a "
+                    "directory that is not the repo root, or `pip install "
+                    "datasets` and retry.")
+            SUN397._materialize_split_from_hf(
+                hfds.load_dataset, hfds.Image, image_dir, split_path, seed)
+        finally:
+            for k in [k for k in list(_sys.modules)
+                      if k == "datasets" or k.startswith("datasets.")]:
+                del _sys.modules[k]
+            _sys.modules.update(saved_modules)
+            for p in reversed(vendored_paths):
+                _sys.path.insert(0, p)
+            importlib.invalidate_caches()
+
+    @staticmethod
+    def _materialize_split_from_hf(load_dataset, HFImage, image_dir: Path,
+                                   split_path: Path, seed: int = 1):
+        """Load SUN397 via an already-imported HuggingFace ``load_dataset``,
+        write the images to disk under one folder per class index, and emit
+        the CoOp-style split JSON."""
         repos = []
         env_repo = os.environ.get("SUN397_HF_REPO")
         if env_repo:
