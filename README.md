@@ -41,15 +41,16 @@ Data preprocessing details:
   `indoor/outdoor` nesting). The split JSON stores image paths relative to
   `<data-root>/sun397/SUN397/`.
 - Download: the official Princeton `SUN397.tar.gz` URL now returns **404**, so
-  the prep script fetches the byte-identical HuggingFace
-  [`dpdl-benchmark/sun397`](https://huggingface.co/datasets/dpdl-benchmark/sun397)
-  mirror by default (falling back to the Princeton URLs), then re-shapes the
-  unpack into the Tip-Adapter style layout above. To use a different mirror,
-  run `SUN397_URL=<url> python prepare_sun397.py --root data`, or download
-  `SUN397.tar.gz` manually and extract it so that
-  `<data-root>/sun397/SUN397/<letter>/<scene>/<image>.jpg` exists before
-  re-running. A checksum mismatch on the tarball is tolerated (the download is
-  retried without MD5 verification).
+  the prep script falls back to the HuggingFace
+  [`tanganke/sun397`](https://huggingface.co/datasets/tanganke/sun397) dataset
+  (via the `datasets` library, installed automatically if missing). It
+  materializes the images under `<data-root>/sun397/SUN397/<NNN>/<image>.jpg`
+  (one folder per class index) and writes the CoOp-style split JSON directly.
+  If you still have a reachable `SUN397.tar.gz` mirror, prefer it with
+  `SUN397_URL=<url> python prepare_sun397.py --root data` (it is extracted into
+  the canonical `<letter>/<scene>/` layout instead); set `SUN397_HF_REPO=<id>`
+  to use a different HuggingFace dataset. Either way the downstream pipeline
+  only depends on the split JSON, so the on-disk folder names don't matter.
 - Normalization: CLIP statistics
   `mean=(0.48145466, 0.4578275, 0.40821073)`,
   `std=(0.26862954, 0.26130258, 0.27577711)`.
