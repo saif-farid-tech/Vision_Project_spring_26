@@ -1,17 +1,17 @@
 # Dataset
 data/
-dtd_data/
-dtd_local/
+eurosat_data/
+eurosat_local/
 
 # Model checkpoints
 checkpoints/
 weights/
 
-# Local copy of CV_Research_Paper_DTD outputs.
+# Local copy of CV_Research_Paper_EuroSAT outputs.
 # Large artifacts (checkpoints, *.pth) are excluded from git; commit
 # selected analysis outputs (figures, results.json, etc.) explicitly.
-CV_Research_Paper_DTD/**/best.pth
-CV_Research_Paper_DTD/**/checkpoint_*.pth
+CV_Research_Paper_EuroSAT/**/best.pth
+CV_Research_Paper_EuroSAT/**/checkpoint_*.pth
 
 # Python
 __pycache__/

@@ -2,8 +2,8 @@
 
 Source: https://github.com/gaopengcuhk/Tip-Adapter/tree/main/datasets
 
-Vendored locally so the DTD experiment can use the same Datum / DatasetBase
-/ DatasetWrapper abstractions and the CoOp-style split JSON.
+Vendored locally so the EuroSAT experiment can use the same Datum /
+DatasetBase / DatasetWrapper abstractions and the CoOp-style split JSON.
 """
 
 from .utils import (
@@ -16,12 +16,8 @@ from .utils import (
     write_json,
     listdir_nohidden,
 )
-from .dtd import DescribableTextures
+from .eurosat import EuroSAT
 from .oxford_pets import OxfordPets
-
-# Alias the Tip-Adapter class under a friendlier name for code that imports
-# `DTD` from this package.
-DTD = DescribableTextures
 
 __all__ = [
     "Datum",
@@ -32,7 +28,6 @@ __all__ = [
     "read_json",
     "write_json",
     "listdir_nohidden",
-    "DescribableTextures",
-    "DTD",
+    "EuroSAT",
     "OxfordPets",
 ]

@@ -1,6 +1,6 @@
 """
 demo.py
-Single-image inference with SHViT-S4 fine-tuned on DTD.
+Single-image inference with SHViT-S4 fine-tuned on EuroSAT.
 
 Loads the checkpoint, preprocesses the image with the same val transform
 used in training (resize + center-crop + CLIP normalize), prints top-5
@@ -8,7 +8,7 @@ predictions, and saves the image with the top prediction overlaid.
 
 Usage:
     python demo.py --image sample.jpg \\
-        --checkpoint "CV_Research_Paper_DTD/Stage 3: fine-tuning SHViT/shvit_s4/best.pth" \\
+        --checkpoint "CV_Research_Paper_EuroSAT/Stage 3: fine-tuning SHViT/shvit_s4/best.pth" \\
         --shvit-dir  SHViT \\
         --data-root  data
 """
@@ -31,7 +31,7 @@ from augmentation import build_val_transform  # noqa: E402
 import splits  # noqa: E402
 
 
-NUM_CLASSES = 47  # DTD under the Tip-Adapter / CoOp split
+NUM_CLASSES = 10  # EuroSAT under the Tip-Adapter / CoOp split
 
 
 def load_shvit_s4(shvit_dir: Path, checkpoint: Path, device):
@@ -56,9 +56,9 @@ def main():
     p.add_argument("--checkpoint", type=Path, required=True)
     p.add_argument("--shvit-dir",  type=Path, required=True)
     p.add_argument("--data-root",  type=Path, required=True,
-                   help="DTD parent dir (used to fetch the class names)")
+                   help="EuroSAT parent dir (used to fetch the class names)")
     p.add_argument("--output",     type=Path,
-                   default=Path("CV_Research_Paper_DTD/Stage 4: Benchmarking and Demo/analysis/demo_output/demo_output.png"))
+                   default=Path("CV_Research_Paper_EuroSAT/Stage 4: Benchmarking and Demo/analysis/demo_output/demo_output.png"))
     p.add_argument("--top-k",      type=int,  default=5)
     args = p.parse_args()
 

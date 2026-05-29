@@ -1,8 +1,8 @@
 """
 evaluate_all.py
-Run inference and benchmarks for the 6 trained DTD classifiers
-(ResNet-50, MobileNetV2, SHViT-S1..S4) on the held-out DTD test split
-(from the Tip-Adapter split_zhou_DescribableTextures.json).
+Run inference and benchmarks for the 6 trained EuroSAT classifiers
+(ResNet-50, MobileNetV2, SHViT-S1..S4) on the held-out EuroSAT test split
+(from the Tip-Adapter split_zhou_EuroSAT.json).
 
 Per model:
     - Top-1 / Top-5 accuracy
@@ -17,10 +17,10 @@ Outputs:
 
 Usage:
     python evaluate_all.py \\
-        --checkpoints-dir CV_Research_Paper_DTD \\
+        --checkpoints-dir CV_Research_Paper_EuroSAT \\
         --shvit-dir       SHViT \\
         --data-root       data \\
-        --output-dir      CV_Research_Paper_DTD/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/results
+        --output-dir      CV_Research_Paper_EuroSAT/Stage\\ 4:\\ Benchmarking\\ and\\ Demo/analysis/results
 """
 
 import argparse
@@ -44,7 +44,7 @@ from metrics import evaluate_model                                          # no
 import splits                                                               # noqa: E402
 
 
-NUM_CLASSES = 47  # DTD under the Tip-Adapter / CoOp split
+NUM_CLASSES = 10  # EuroSAT under the Tip-Adapter / CoOp split
 
 # (model name, subdir under checkpoints-dir, checkpoint format)
 MODELS = [
@@ -197,11 +197,11 @@ def write_latex_table(rows, path: Path) -> None:
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--checkpoints-dir", type=Path,
-                   default=Path("CV_Research_Paper_DTD"))
+                   default=Path("CV_Research_Paper_EuroSAT"))
     p.add_argument("--shvit-dir",       type=Path, default=_REPO_ROOT / "SHViT")
     p.add_argument("--data-root",       type=Path, default=Path("data"))
     p.add_argument("--output-dir",      type=Path,
-                   default=Path("CV_Research_Paper_DTD/Stage 4: Benchmarking and Demo/analysis/results"))
+                   default=Path("CV_Research_Paper_EuroSAT/Stage 4: Benchmarking and Demo/analysis/results"))
     p.add_argument("--batch-size",      type=int,  default=64)
     p.add_argument("--num-workers",     type=int,  default=2)
     args = p.parse_args()
@@ -219,7 +219,7 @@ def main():
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    # ---- Test set (DTD Tip-Adapter split) -----------------------
+    # ---- Test set (EuroSAT Tip-Adapter split) -----------------------
     splits.ensure_prepared(args.data_root)
     test_ds = splits.load_test(args.data_root, transform=build_val_transform())
     class_names = test_ds.classes
