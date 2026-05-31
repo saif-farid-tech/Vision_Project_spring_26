@@ -1,70 +1,91 @@
-"""splits.py – deterministic 90/10 train/val split using Ahmed's JSON manifests.
+"""splits.py  (Tip-Adapter / _Food101 variant)
 
-The JSON manifests (train_val_split_seed*.json) contain per-class counts, not
-image paths.  This helper converts them into actual torch Subset indices by
-shuffling each class's indices with the manifest's seed.
+Data split for this branch is Tip-Adapter's **Zhou split** for Food-101,
+loaded from ``<data_root>/food-101/split_zhou_Food101.json`` via
+``OxfordPets.read_split`` (see the ``tip_datasets`` package). This replaces the
+previous deterministic 90/10 count-manifest split keyed off
+``train_val_split_seed*.json``.
 
-Food101(split='test') is never loaded here — it is reserved for the Stage 3
-final evaluation only.
+The directory layout is the one ``torchvision.datasets.Food101`` already
+produces — ``<data_root>/food-101/images/<class>/<img>.jpg`` — plus the
+``split_zhou_Food101.json`` file dropped into ``<data_root>/food-101/``.
+
+Datasets are returned as ``DatasetWrapper`` instances (Tip-Adapter's loader),
+each yielding ``(image_tensor, int_label)`` so they slot straight into the
+existing training / evaluation loops.
 
 Usage:
     import splits
     train_ds, val_ds = splits.load_split(
         data_root="data",
-        split_json="train_val_split_seed42.json",
         train_transform=train_tf,
         val_transform=val_tf,
     )
+    test_ds = splits.load_test("data", transform=val_tf)
+    class_names = splits.get_class_names("data")   # label-index order
 """
 
-import json
-import random
+from augmentation import build_train_transform, build_val_transform
+from tip_datasets import DatasetWrapper, Food101
 
-import torchvision
-from torch.utils.data import Subset
+# Default split file name (lives under <data_root>/food-101/). Kept here so the
+# notebooks can reference the canonical name when downloading it.
+SPLIT_FILE_NAME = "split_zhou_Food101.json"
 
 
-def load_split(data_root, split_json, train_transform=None, val_transform=None):
+def build_food101(data_root, num_shots=-1):
+    """Return the Tip-Adapter ``Food101`` dataset object (Zhou split).
+
+    ``num_shots=-1`` keeps the full training split (no few-shot subsampling).
+    The object exposes ``.train_x``, ``.val``, ``.test`` (lists of ``Datum``),
+    plus ``.classnames`` / ``.lab2cname`` / ``.num_classes``.
     """
-    Returns (train_subset, val_subset) carved from Food101(split='train').
+    return Food101(str(data_root), num_shots=num_shots)
 
-    Each class contributes exactly manifest["val"][class_name] samples to the
-    val subset and the remainder to the train subset, selected by a
-    deterministic shuffle keyed to manifest["seed"].
 
-    Two separate Food101 instances are created so each subset can carry its
-    own transform without interfering with the other.
+def load_split(data_root, split_json=None, train_transform=None,
+               val_transform=None, num_shots=-1, input_size=224):
+    """Return ``(train_ds, val_ds)`` for the Zhou split.
+
+    ``split_json`` is accepted (and ignored) only for backward compatibility
+    with the previous count-manifest API; the split now always comes from
+    ``<data_root>/food-101/split_zhou_Food101.json``.
     """
-    with open(split_json) as f:
-        manifest = json.load(f)
-    seed = manifest["seed"]
+    base = build_food101(data_root, num_shots=num_shots)
 
-    # Probe instance: no transform, just used to enumerate labels.
-    probe = torchvision.datasets.Food101(
-        root=str(data_root), split="train", download=True
+    if train_transform is None:
+        train_transform = build_train_transform(input_size)
+    if val_transform is None:
+        val_transform = build_val_transform(input_size)
+
+    train_ds = DatasetWrapper(
+        base.train_x, input_size=input_size, transform=train_transform, is_train=True,
     )
-    idx_to_class = probe.classes  # sorted list; integer label == list position
-
-    # Group dataset indices by class name.
-    class_indices: dict = {c: [] for c in idx_to_class}
-    for i, label in enumerate(probe._labels):
-        class_indices[idx_to_class[label]].append(i)
-
-    # Deterministic per-class shuffle, then split.
-    rng = random.Random(seed)
-    train_idx, val_idx = [], []
-    for cls_name, indices in class_indices.items():
-        shuffled = indices[:]
-        rng.shuffle(shuffled)
-        n_val = manifest["val"][cls_name]
-        val_idx.extend(shuffled[:n_val])
-        train_idx.extend(shuffled[n_val:])
-
-    # Two instances so each subset has its own transform.
-    train_ds = torchvision.datasets.Food101(
-        root=str(data_root), split="train", transform=train_transform, download=False
+    val_ds = DatasetWrapper(
+        base.val, input_size=input_size, transform=val_transform, is_train=False,
     )
-    val_ds = torchvision.datasets.Food101(
-        root=str(data_root), split="train", transform=val_transform, download=False
+    return train_ds, val_ds
+
+
+def load_test(data_root, transform=None, num_shots=-1, input_size=224):
+    """Return the Zhou-split **test** set as a ``DatasetWrapper``."""
+    base = build_food101(data_root, num_shots=num_shots)
+    if transform is None:
+        transform = build_val_transform(input_size)
+    return DatasetWrapper(
+        base.test, input_size=input_size, transform=transform, is_train=False,
     )
-    return Subset(train_ds, train_idx), Subset(val_ds, val_idx)
+
+
+def get_class_names(data_root, num_shots=-1):
+    """Class names in label-index order (matches the trained model's logits)."""
+    return list(build_food101(data_root, num_shots=num_shots).classnames)
+
+
+def get_test_datums(data_root, num_shots=-1):
+    """The ordered list of test ``Datum`` objects (impath / label / classname).
+
+    Useful for error analysis / demos that need the original image paths in the
+    same order the test ``DataLoader`` iterates them.
+    """
+    return build_food101(data_root, num_shots=num_shots).test

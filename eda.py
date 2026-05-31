@@ -1,6 +1,10 @@
 """
-eda.py
+eda.py  (Tip-Adapter / _Food101 variant)
 Food-101 EDA visualizations for the report's data section.
+
+Runs over the **Tip-Adapter Zhou split** (split_zhou_Food101.json, via the
+tip_datasets package) rather than torchvision's train/test split, so the EDA
+reflects the exact partition used for training and evaluation on this branch.
 
 Outputs (under --output-dir):
     eda_samples.png            5x5 grid of random training images + labels
@@ -14,24 +18,32 @@ Usage:
 
 import argparse
 import random
+import sys
 from collections import Counter
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
-from torchvision.datasets import Food101
+
+_REPO_ROOT = Path(__file__).parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+import splits  # noqa: E402
 
 
 def load_datasets(data_root: Path):
-    """Both splits, no transform — we only need labels and file paths."""
-    train = Food101(root=str(data_root), split="train", download=True)
-    test  = Food101(root=str(data_root), split="test",  download=True)
-    return train, test
+    """Train + test Datum lists from the Zhou split, plus the class-name list.
+
+    We only need labels and file paths here, so no transforms are applied.
+    """
+    base = splits.build_food101(data_root)
+    return base.train_x, base.test, list(base.classnames)
 
 
-def class_counts(ds) -> Counter:
-    return Counter(ds._labels)
+def class_counts(datums) -> Counter:
+    return Counter(d.label for d in datums)
 
 
 # ---------------------------------------------------------------------------
@@ -42,9 +54,10 @@ def plot_sample_grid(train, classes, out_path: Path, n_rows=5, n_cols=5):
     indices = random.sample(range(len(train)), n_rows * n_cols)
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 2.2, n_rows * 2.4))
     for ax, idx in zip(axes.flat, indices):
-        img, label = train[idx]  # PIL.Image
-        ax.imshow(img)
-        ax.set_title(classes[label].replace("_", " "), fontsize=8)
+        d = train[idx]
+        with Image.open(d.impath) as im:
+            ax.imshow(im.convert("RGB"))
+        ax.set_title(classes[d.label].replace("_", " "), fontsize=8)
         ax.set_xticks([])
         ax.set_yticks([])
     fig.suptitle("Food-101 random training samples", fontsize=12)
@@ -71,7 +84,7 @@ def plot_image_sizes(sizes, out_path: Path):
 
 
 def plot_class_distribution(train, test, classes, out_path: Path):
-    """Food101.classes is already sorted alphabetically by torchvision."""
+    """Class indices follow the Zhou split's label ordering (alphabetical)."""
     train_counts = class_counts(train)
     test_counts  = class_counts(test)
     order = list(range(len(classes)))
@@ -86,7 +99,7 @@ def plot_class_distribution(train, test, classes, out_path: Path):
     ax.set_xticklabels([classes[i].replace("_", " ") for i in order],
                        rotation=90, fontsize=6)
     ax.set_ylabel("Image count")
-    ax.set_title("Food-101 class distribution (alphabetical)")
+    ax.set_title("Food-101 class distribution (Zhou split)")
     ax.legend()
     fig.tight_layout()
     fig.savefig(out_path, dpi=300, bbox_inches="tight")
@@ -104,8 +117,8 @@ def write_summary(train, test, sizes, classes, out_path: Path):
     heights   = [h for _, h in sizes]
 
     lines = [
-        "Food-101 EDA Summary",
-        "=" * 40,
+        "Food-101 EDA Summary (Tip-Adapter Zhou split)",
+        "=" * 48,
         f"Total images        : {len(train) + len(test):,}",
         f"  train             : {len(train):,}",
         f"  test              : {len(test):,}",
@@ -126,7 +139,7 @@ def write_summary(train, test, sizes, classes, out_path: Path):
         f"  height min/max    : {min(heights)} / {max(heights)}",
         f"  height mean/median: {np.mean(heights):.1f} / {np.median(heights):.1f}",
         "",
-        "Class list (sorted):",
+        "Class list (label-index order):",
         ", ".join(classes),
     ]
     out_path.write_text("\n".join(lines) + "\n")
@@ -149,8 +162,7 @@ def main():
     np.random.seed(args.seed)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    train, test = load_datasets(args.data_root)
-    classes = train.classes
+    train, test, classes = load_datasets(args.data_root)
     print(f"Train: {len(train):,}  Test: {len(test):,}  Classes: {len(classes)}")
 
     # 5x5 sample grid (decodes 25 images — cheap)
@@ -162,12 +174,12 @@ def main():
     indices = random.sample(range(len(train)), n)
     sizes = []
     for i in indices:
-        with Image.open(train._image_files[i]) as im:
+        with Image.open(train[i].impath) as im:
             sizes.append(im.size)  # (width, height)
     plot_image_sizes(sizes, args.output_dir / "eda_image_sizes.png")
     print("Wrote eda_image_sizes.png")
 
-    # Class-frequency bars (alphabetical)
+    # Class-frequency bars
     plot_class_distribution(train, test, classes,
                             args.output_dir / "eda_class_distribution.png")
     print("Wrote eda_class_distribution.png")

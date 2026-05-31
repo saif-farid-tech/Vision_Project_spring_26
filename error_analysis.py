@@ -31,7 +31,6 @@ import numpy as np
 import seaborn as sns
 import torch
 import torch.nn.functional as F
-from torchvision.datasets import Food101
 
 
 _REPO_ROOT = Path(__file__).parent
@@ -39,6 +38,8 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from augmentation import build_val_transform                                  # noqa: E402
+from tip_datasets import read_image                                           # noqa: E402
+import splits                                                                 # noqa: E402
 
 
 NUM_CLASSES        = 101
@@ -150,7 +151,8 @@ def plot_worst_15(per_class_acc, class_names, out_path: Path):
     print(f"Wrote {out_path}")
 
 
-def plot_misclassified_grid(args, all_preds, all_targets, class_names, device, out_path: Path):
+def plot_misclassified_grid(args, all_preds, all_targets, class_names, test_datums,
+                            device, out_path: Path):
     misclass = np.where(all_preds != all_targets)[0]
     if misclass.size == 0:
         print("[skip] misclassified_grid: zero misclassifications")
@@ -158,22 +160,22 @@ def plot_misclassified_grid(args, all_preds, all_targets, class_names, device, o
     n = N_GRID_ROWS * N_GRID_COLS
     sample = sorted(random.sample(list(misclass), min(n, len(misclass))))
 
+    # test_datums is the ordered Zhou-split test set; its order matches the
+    # all_preds / all_targets order produced by evaluate_all.py (shuffle=False).
     val_tf = build_val_transform()
-    ds_input   = Food101(root=str(args.data_root), split="test",
-                         transform=val_tf, download=True)
-    ds_display = Food101(root=str(args.data_root), split="test",
-                         transform=None,   download=True)
 
     model = load_shvit_s4(args.shvit_dir, args.checkpoint, device)
 
-    inputs = torch.stack([ds_input[int(i)][0] for i in sample]).to(device)
+    inputs = torch.stack(
+        [val_tf(read_image(test_datums[int(i)].impath)) for i in sample]
+    ).to(device)
     with torch.no_grad():
         probs = F.softmax(model(inputs), dim=1).cpu()
 
     fig, axes = plt.subplots(N_GRID_ROWS, N_GRID_COLS,
                              figsize=(N_GRID_COLS * 3.6, N_GRID_ROWS * 4.0))
     for ax, batch_pos, idx in zip(axes.flat, range(len(sample)), sample):
-        img, _ = ds_display[int(idx)]
+        img = read_image(test_datums[int(idx)].impath)
         true_c = int(all_targets[idx])
         pred_c = int(all_preds[idx])         # canonical pred from results.json
         conf   = probs[batch_pos, pred_c].item()
@@ -264,9 +266,11 @@ def main():
     all_preds   = np.asarray(results["all_preds"])
     all_targets = np.asarray(results["all_targets"])
 
-    # ---- Class names from Food101(split='test') -------------------------
-    test_ds = Food101(root=str(args.data_root), split="test", download=True)
-    class_names = list(test_ds.classes)
+    # ---- Class names + test set from the Tip-Adapter Zhou split ----------
+    base = splits.build_food101(args.data_root)
+    class_names = list(base.classnames)
+    test_datums = base.test
+    test_size = len(test_datums)
     if len(class_names) != NUM_CLASSES:
         raise SystemExit(f"expected {NUM_CLASSES} classes, got {len(class_names)}")
 
@@ -298,14 +302,14 @@ def main():
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         try:
             plot_misclassified_grid(
-                args, all_preds, all_targets, class_names, device,
+                args, all_preds, all_targets, class_names, test_datums, device,
                 args.output_dir / "misclassified_grid.png",
             )
         except Exception as exc:
             print(f"[warn] misclassified_grid failed: {exc}")
 
     # ---- Summary ---------------------------------------------------------
-    write_summary(results, class_names, top_pairs, len(test_ds),
+    write_summary(results, class_names, top_pairs, test_size,
                   args.output_dir / "error_analysis_summary.txt")
 
 

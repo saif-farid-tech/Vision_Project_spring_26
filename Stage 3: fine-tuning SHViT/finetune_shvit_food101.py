@@ -3,10 +3,11 @@ finetune_shvit_food101.py
 
 Wrapper that fine-tunes SHViT on Food-101 with a single GPU.
 
-Design choices that match the original SHViT paper / engine.py:
-  - Augmentation: defined in augmentation.py at the repo root
-    (RandAugment(2, 9) + RandomErasing(p=0.25) train, plain resize+crop val,
-    Mixup(0.8) + CutMix(1.0) + label smoothing 0.1).
+Design choices on this branch (Tip-Adapter data pipeline):
+  - Data split: Tip-Adapter's Zhou split (split_zhou_Food101.json) via splits.py.
+  - Preprocessing: Tip-Adapter's transform (BICUBIC resize + ToTensor + CLIP
+    normalization) for both train and val, defined in augmentation.py. No
+    RandAugment / RandomErasing / Mixup — training uses plain cross-entropy.
   - Forward pass during training runs in full FP32 (matching the commented-out
     autocast in the original engine.py's train_one_epoch).
   - Eval forward pass uses torch.cuda.amp.autocast (matching original evaluate()).
@@ -73,7 +74,8 @@ def get_args():
     p.add_argument("--data-root",   type=Path, default=Path("data"))
     p.add_argument("--output-dir",  type=Path, default=Path("checkpoints/shvit_food101"))
     p.add_argument("--split-file",  default=str(_REPO_ROOT / "train_val_split_seed42.json"),
-                   help="Ahmed's train/val count-manifest JSON")
+                   help="(ignored) kept for CLI compatibility; the split now comes "
+                        "from <data-root>/food-101/split_zhou_Food101.json")
     p.add_argument("--resume",      type=Path, default=None,
                    help="Resume a previous fine-tuning run from a checkpoint_N.pth")
 
@@ -117,8 +119,7 @@ def build_loaders(args):
         train_transform=build_train_transform(img_size=args.input_size),
         val_transform=build_val_transform(img_size=args.input_size),
     )
-    print(f"Split ({Path(args.split_file).name}): "
-          f"{len(train_ds):,} train  {len(val_ds):,} val")
+    print(f"Zhou split: {len(train_ds):,} train  {len(val_ds):,} val")
     train_loader = torch.utils.data.DataLoader(
         train_ds, batch_size=args.batch_size, shuffle=True,
         num_workers=args.num_workers, pin_memory=True, drop_last=True,
@@ -290,10 +291,12 @@ def main():
     print(f"Trainable parameters: {n_params:,}")
 
     # ---- Loss / Mixup -------------------------------------------------------
-    # Mixup + CutMix + label smoothing are always active in the SHViT recipe;
-    # SoftTargetCrossEntropy is the matching loss for soft (mixup) targets.
+    # Tip-Adapter preprocessing uses no Mixup/CutMix (build_mixup_fn returns
+    # None on this branch), so we train with plain cross-entropy on hard labels.
+    # If a mixup function is ever re-enabled, SoftTargetCrossEntropy is the
+    # matching loss for the resulting soft targets.
     mixup_fn  = build_mixup_fn(num_classes=NUM_CLASSES)
-    criterion = SoftTargetCrossEntropy()
+    criterion = SoftTargetCrossEntropy() if mixup_fn is not None else torch.nn.CrossEntropyLoss()
 
     # ---- Optimizer / scaler -------------------------------------------------
     optimizer = torch.optim.AdamW(

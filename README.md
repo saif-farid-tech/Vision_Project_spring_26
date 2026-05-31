@@ -1,13 +1,22 @@
-# Food Classification with SHViT
+# Food Classification with SHViT — Tip-Adapter data pipeline variant
 
 COE-486 Computer Vision — AUS Spring 2026.
 Fine-tuning SHViT (Single-Head Vision Transformer, CVPR 2024) on Food-101 and comparing it against ResNet-50 and MobileNetV2 baselines.
+
+> **This branch (`Vision_Project_spring_26_Food101`)** runs the *same* experiment as the main branch but swaps the **data preprocessing and data split** for the ones used by [Tip-Adapter's `datasets/utils.py`](https://github.com/gaopengcuhk/Tip-Adapter/blob/main/datasets/utils.py):
+> - **Data split:** the **Zhou split** (`split_zhou_Food101.json`, read via `OxfordPets.read_split`) instead of the previous deterministic 90/10 count-manifest split. The `food-101/images/<class>/*.jpg` layout is the one `torchvision.datasets.Food101` already produces; the split JSON is downloaded from Google Drive (file id `1QK0tGi096I0Ba6kggatX1ee6dJFIcEJl`) into `<data_root>/food-101/`.
+> - **Preprocessing:** Tip-Adapter's `DatasetWrapper` transform — **BICUBIC resize → ToTensor → CLIP normalization** (mean `(0.48145466, 0.4578275, 0.40821073)`, std `(0.26862954, 0.26130258, 0.27577711)`) — for **both** train and val/test, with **no** RandAugment / RandomErasing / Mixup / CutMix. Training therefore uses plain cross-entropy on hard labels.
+> - **Output location:** every Colab notebook saves all of its files (dataset, weights, checkpoints, analysis artifacts, bundles) under a single root directory called **`CV_Research_Paper_Food101`**.
+>
+> The ported pipeline lives in the `tip_datasets/` package; `splits.py` and `augmentation.py` are thin wrappers over it.
 
 ---
 
 ## Project description
 
-This project investigates whether SHViT — a lightweight transformer designed for mobile and edge inference — can match the accuracy of established CNN baselines (ResNet-50, MobileNetV2) on the 101-class Food-101 fine-grained food recognition benchmark, while remaining cheap enough to run interactively. We fine-tune all four SHViT variants (S1–S4) from ImageNet-pretrained checkpoints using the paper's training recipe (cosine LR with warmup, RandAugment, RandomErasing, Mixup/CutMix, label smoothing, and gradient clipping), train both CNN baselines under the exact same data split and augmentation pipeline so the comparison is apples-to-apples, and benchmark every model end-to-end on accuracy, parameter count, GFLOPs, GPU throughput, and CPU latency.
+This project investigates whether SHViT — a lightweight transformer designed for mobile and edge inference — can match the accuracy of established CNN baselines (ResNet-50, MobileNetV2) on the 101-class Food-101 fine-grained food recognition benchmark, while remaining cheap enough to run interactively. We fine-tune all four SHViT variants (S1–S4) from ImageNet-pretrained checkpoints (cosine LR with warmup, gradient clipping), train both CNN baselines under the exact same data split and preprocessing so the comparison is apples-to-apples, and benchmark every model end-to-end on accuracy, parameter count, GFLOPs, GPU throughput, and CPU latency. On this branch the data split and preprocessing follow Tip-Adapter (Zhou split + CLIP-normalized BICUBIC resize, no augmentation), as described in the note above.
+
+> **Note on committed artifacts:** the checkpoints, training logs, `results.json` dumps, and figures currently committed under Stages 2–4 were produced on the *main* branch (90/10 count-manifest split + ImageNet/RandAugment preprocessing). They are carried over so the repo layout is complete; re-run the notebooks to regenerate them under the Tip-Adapter pipeline — the headline numbers below will change accordingly.
 
 ## What we achieved
 
@@ -20,12 +29,11 @@ We trained and benchmarked all six models on a shared 90/10 train/val split (see
 **Root files**
 - `README.md` — this document; orients a new reader to the repo layout, the project goal, and the headline results.
 - `.gitignore` — keeps the downloaded Food-101 dataset, local checkpoint caches, and Python/Colab build artifacts out of version control.
-- `augmentation.py` — defines the training and validation transforms (RandAugment + RandomErasing) and the Mixup/CutMix function used by both baselines and SHViT.
+- `augmentation.py` — on this branch, returns Tip-Adapter's preprocessing transform (BICUBIC resize + ToTensor + CLIP normalization) for both the train and val transforms; `build_mixup_fn` returns `None` (no Mixup/CutMix). No RandAugment/RandomErasing.
 - `metrics.py` — provides top-1/top-5 accuracy, per-class accuracy, confusion matrix, and precision/recall/F1 used to evaluate every model.
-- `splits.py` — converts the count-manifest JSONs into deterministic train/val `torch.Subset` pairs so every model is evaluated on the same held-out images.
-- `train_val_split_seed42.json` — the primary 90/10 train/val split (seed 42) used in all training runs.
-- `train_val_split_seed123.json` — alternative split with seed 123 for reproducibility checks.
-- `train_val_split_seed456.json` — alternative split with seed 456 for reproducibility checks.
+- `splits.py` — thin wrapper over `tip_datasets`: builds the Tip-Adapter `Food101` object (Zhou split) and returns train/val/test `DatasetWrapper`s plus the label-ordered class names.
+- `tip_datasets/` — ported Tip-Adapter data package: `utils.py` (`Datum`/`DatasetBase`/`DatasetWrapper`/`build_data_loader` + CLIP preprocessing), `oxford_pets.py` (`read_split`/`save_split`), and `food101.py` (the Food-101 Zhou-split dataset class).
+- `train_val_split_seed{42,123,456}.json` — the previous 90/10 count-manifest splits. **Unused on this branch** (kept for reference); the split now comes from `split_zhou_Food101.json`.
 - `eda.py` — generates the report's exploratory data analysis (sample grid, image-size histograms, class-distribution bars, summary text) for the Food-101 dataset.
 - `evaluate_all.py` — runs inference and benchmarks (params, GFLOPs, GPU throughput, CPU latency, top-1/top-5, confusion matrix) for all six trained models and writes per-model JSON plus Markdown/LaTeX summary tables.
 - `make_figures.py` — builds the headline figures (validation-accuracy curves, train-loss curves, accuracy bar chart, speed-vs-accuracy scatter) from the training logs and `evaluate_all.py` outputs.

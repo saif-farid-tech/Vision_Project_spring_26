@@ -2,12 +2,14 @@
 train_baseline.py
 Fine-tune ResNet-50 or MobileNetV2 on Food-101 as a baseline for SHViT.
 
-Val set: 10 % holdout from Food101(split='train') using Ahmed's JSON manifests
-         (train_val_split_seed*.json).  Food101(split='test') is reserved for
-         the Stage 3 final evaluation only.
+Data split: Tip-Adapter's Zhou split (split_zhou_Food101.json) via splits.py /
+            the tip_datasets package. Train / val / test all come from that
+            split file.
 
-Augmentation: shared with Stage 3 via augmentation.py at the repo root
-              (RandAugment + RandomErasing for train, Resize+CenterCrop for val).
+Preprocessing: Tip-Adapter's transform (BICUBIC resize + ToTensor + CLIP
+               normalization) for both train and val, via augmentation.py.
+               No RandAugment / RandomErasing / Mixup — training uses plain
+               cross-entropy on hard labels.
 
 Usage:
     python train_baseline.py --model resnet50      --data-root data --output-dir checkpoints
@@ -57,8 +59,7 @@ def build_dataloaders(args):
         train_transform=build_train_transform(),
         val_transform=build_val_transform(),
     )
-    print(f"Split ({Path(args.split_file).name}): "
-          f"{len(train_ds):,} train  {len(val_ds):,} val")
+    print(f"Zhou split: {len(train_ds):,} train  {len(val_ds):,} val")
 
     train_loader = DataLoader(
         train_ds, batch_size=args.batch_size, shuffle=True,
@@ -148,7 +149,8 @@ def main():
     parser.add_argument("--output-dir",  default="checkpoints")
     parser.add_argument("--split-file",
                         default=str(_REPO_ROOT / "train_val_split_seed42.json"),
-                        help="Ahmed's train/val count-manifest JSON")
+                        help="(ignored) kept for CLI compatibility; the split now "
+                             "comes from <data-root>/food-101/split_zhou_Food101.json")
     parser.add_argument("--epochs",      type=int,   default=50)
     parser.add_argument("--batch-size",  type=int,   default=64)
     parser.add_argument("--lr",          type=float, default=1e-4)
@@ -169,13 +171,12 @@ def main():
 
     model = build_model(args.model).to(device)
 
-    # Mixup + CutMix + label smoothing (shared with SHViT recipe).
-    # SoftTargetCrossEntropy is the matching loss for soft (mixup) targets;
-    # plain CrossEntropyLoss is kept for val loss tracking, since soft-target
-    # CE doesn't accept int labels.
+    # Tip-Adapter preprocessing uses no Mixup/CutMix (build_mixup_fn returns
+    # None on this branch), so training uses plain cross-entropy on hard labels.
+    # SoftTargetCrossEntropy is only used if a mixup function is re-enabled.
     mixup_fn      = build_mixup_fn(num_classes=NUM_CLASSES)
-    criterion     = SoftTargetCrossEntropy()
     val_criterion = nn.CrossEntropyLoss()
+    criterion     = SoftTargetCrossEntropy() if mixup_fn is not None else val_criterion
 
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=args.lr, weight_decay=args.weight_decay,

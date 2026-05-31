@@ -1,45 +1,49 @@
-import torch
-from torchvision import transforms
-from timm.data.mixup import Mixup
+"""augmentation.py  (Tip-Adapter / _Food101 variant)
 
-# Standard ImageNet normalization values
-IMAGENET_MEAN = (0.485, 0.456, 0.406)
-IMAGENET_STD = (0.229, 0.224, 0.225)
+Data preprocessing for this branch is taken directly from Tip-Adapter's
+``datasets/utils.py`` (the ``DatasetWrapper.to_tensor`` pipeline):
+
+    BICUBIC Resize  ->  ToTensor  ->  CLIP normalization
+
+No RandAugment, no RandomErasing, no Mixup/CutMix — train and validation use the
+**same** deterministic transform, exactly as Tip-Adapter does. This replaces the
+previous SHViT recipe (ImageNet normalization + RandAugment + RandomErasing +
+Mixup) so the experiment matches Tip-Adapter's preprocessing.
+
+``build_mixup_fn`` is kept (returns ``None``) only so existing imports in the
+training scripts keep working; the scripts fall back to plain cross-entropy when
+no mixup function is returned.
+"""
+
+from torchvision import transforms
+from torchvision.transforms import InterpolationMode
+
+# CLIP normalization statistics (Tip-Adapter / OpenAI CLIP), NOT ImageNet's.
+CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
+CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
+
+
+def _tip_preprocess(img_size=224):
+    """The Tip-Adapter DatasetWrapper preprocessing: BICUBIC resize to a square
+    ``img_size``, ToTensor, then CLIP normalization."""
+    return transforms.Compose([
+        transforms.Resize((img_size, img_size), interpolation=InterpolationMode.BICUBIC),
+        transforms.ToTensor(),
+        transforms.Normalize(CLIP_MEAN, CLIP_STD),
+    ])
+
 
 def build_train_transform(img_size=224):
-    """
-    Training augmentations
-    """
-    return transforms.Compose([
-        transforms.RandomResizedCrop(img_size),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandAugment(num_ops=2, magnitude=9),
-        transforms.ToTensor(),
-        transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
-        transforms.RandomErasing(p=0.25)
-    ])
+    """Training preprocessing — identical to Tip-Adapter (no augmentation)."""
+    return _tip_preprocess(img_size)
+
 
 def build_val_transform(img_size=224):
-    """
-    Validation/Test augmentations
-    """
-    return transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(img_size),
-        transforms.ToTensor(),
-        transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD)
-    ])
+    """Validation / test preprocessing — identical to the train transform."""
+    return _tip_preprocess(img_size)
+
 
 def build_mixup_fn(num_classes=101):
-    """
-    Mixup & CutMix augmentation
-    """
-    return Mixup(
-        mixup_alpha=0.8,
-        cutmix_alpha=1.0,
-        prob=1.0,
-        switch_prob=0.5,
-        mode="batch",
-        label_smoothing=0.1,
-        num_classes=num_classes
-    )
+    """Tip-Adapter uses no Mixup/CutMix; return ``None`` so callers fall back to
+    plain cross-entropy on hard labels."""
+    return None

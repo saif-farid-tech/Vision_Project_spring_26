@@ -3,9 +3,9 @@ demo.py
 Single-image inference with SHViT-S4 fine-tuned on Food-101.
 
 Loads the checkpoint, preprocesses the image with the same val transform
-used in training (Resize 256 -> CenterCrop 224 -> ImageNet normalize),
-prints top-5 predictions, and saves the image with the top prediction
-overlaid.
+used in training (Tip-Adapter preprocessing: BICUBIC Resize to 224 ->
+ToTensor -> CLIP normalize), prints top-5 predictions, and saves the image
+with the top prediction overlaid.
 
 Usage:
     python demo.py --image food.jpg \\
@@ -22,7 +22,6 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from torchvision.datasets import Food101
 
 
 _REPO_ROOT = Path(__file__).parent
@@ -30,6 +29,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from augmentation import build_val_transform  # noqa: E402
+import splits                                 # noqa: E402
 
 
 NUM_CLASSES = 101
@@ -65,10 +65,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    # ---- Class names ----------------------------------------------------
-    class_names = list(
-        Food101(root=str(args.data_root), split="test", download=True).classes
-    )
+    # ---- Class names (Tip-Adapter Zhou split, label-index order) --------
+    class_names = splits.get_class_names(args.data_root)
 
     # ---- Image + preprocessing -----------------------------------------
     if not args.image.exists():

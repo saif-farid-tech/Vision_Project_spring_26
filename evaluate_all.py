@@ -1,7 +1,8 @@
 """
 evaluate_all.py
 Run inference and benchmarks for the 6 trained Food-101 classifiers
-(ResNet-50, MobileNetV2, SHViT-S1..S4) on Food101(split='test').
+(ResNet-50, MobileNetV2, SHViT-S1..S4) on the Tip-Adapter Zhou test split
+(split_zhou_Food101.json, read via the tip_datasets package).
 
 Per model:
     - Top-1 / Top-5 accuracy
@@ -32,7 +33,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torchvision.datasets import Food101
 from torchvision.models import mobilenet_v2, resnet50
 
 _REPO_ROOT = Path(__file__).parent
@@ -41,6 +41,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from augmentation import build_val_transform                                # noqa: E402
 from metrics import evaluate_model                                          # noqa: E402
+import splits                                                               # noqa: E402
 
 
 NUM_CLASSES = 101
@@ -223,12 +224,9 @@ def main():
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    # ---- Test set --------------------------------------------------------
-    test_ds = Food101(
-        root=str(args.data_root), split="test",
-        transform=build_val_transform(), download=True,
-    )
-    class_names = test_ds.classes
+    # ---- Test set (Tip-Adapter Zhou split) -------------------------------
+    test_ds = splits.load_test(args.data_root, transform=build_val_transform())
+    class_names = splits.get_class_names(args.data_root)
     test_loader = DataLoader(
         test_ds, batch_size=args.batch_size, shuffle=False,
         num_workers=args.num_workers, pin_memory=True,
