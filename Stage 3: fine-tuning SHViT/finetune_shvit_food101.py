@@ -137,13 +137,28 @@ def build_loaders(args):
 
 def load_pretrained(model: torch.nn.Module, ckpt_path: Path) -> None:
     """
-    Load ImageNet weights, dropping head keys whose shape mismatches.
-    Mirrors the --finetune branch in SHViT's main.py exactly.
+    Load ImageNet-pretrained SHViT weights, dropping only the classifier-head
+    keys whose shape mismatches the Food-101 head. Mirrors the --finetune branch
+    in SHViT's main.py.
+
+    Fail-fast guarantees (so the transformer can never silently train from random
+    init off a missing / empty / truncated / wrong checkpoint):
+      - torch.load raising on a corrupt/0-byte file propagates.
+      - an empty / non-dict state_dict raises.
+      - any *backbone* (non-head) parameter left uninitialized raises.
+    Only the classifier head (``head.*`` / ``head_dist.*``) is allowed to be
+    (re)initialized, since we intentionally swap the 1000-class head for 101.
     """
     # weights_only=False: PyTorch 2.6+ default change; SHViT checkpoints carry
     # the original argparse Namespace which is a pickled (non-tensor) object.
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     state_dict = ckpt.get("model", ckpt)
+
+    if not isinstance(state_dict, dict) or len(state_dict) == 0:
+        raise SystemExit(
+            f"Pretrained checkpoint {ckpt_path} contains no weights "
+            f"(got {type(state_dict).__name__}). Refusing to train from random init."
+        )
 
     # SHViT classifier: head.l.{weight,bias}  (distillation variant: head_dist.l.*)
     head_keys = [
@@ -158,10 +173,24 @@ def load_pretrained(model: torch.nn.Module, ckpt_path: Path) -> None:
             removed.append(k)
 
     msg = model.load_state_dict(state_dict, strict=False)
+
+    # Any missing key that is NOT part of the classifier head means the backbone
+    # did not load -> refuse to train from a partial / wrong checkpoint.
+    backbone_missing = [k for k in msg.missing_keys if not k.startswith("head")]
+    if backbone_missing:
+        raise SystemExit(
+            f"Pretrained load from {ckpt_path} left {len(backbone_missing)} "
+            f"backbone parameter(s) uninitialized, e.g. {backbone_missing[:5]}.\n"
+            f"The checkpoint does not match '{type(model).__name__}'; refusing to "
+            f"train from a partially-initialized transformer."
+        )
+
+    loaded = len(model_sd) - len(msg.missing_keys)
     print(f"Pretrained weights loaded from {ckpt_path}")
-    print(f"  Removed (shape mismatch) : {removed}")
-    if msg.missing_keys:
-        print(f"  Missing keys           : {msg.missing_keys}")
+    print(f"  Loaded tensors         : {loaded}/{len(model_sd)}")
+    print(f"  Head reinitialized     : {sorted(set(removed) | set(msg.missing_keys))}")
+    if msg.unexpected_keys:
+        print(f"  Unexpected (ignored)   : {msg.unexpected_keys}")
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +313,19 @@ def main():
 
     # ---- Model --------------------------------------------------------------
     model = create_model(args.model, pretrained=False, num_classes=NUM_CLASSES)
-    if args.finetune and args.finetune.exists():
+
+    # Load pretrained weights unless we are resuming (a resume restores a full
+    # fine-tune checkpoint, head included, further below). Outside of resume we
+    # REQUIRE a valid pretrained checkpoint and refuse to proceed without one,
+    # so the transformer can never silently train from random init.
+    resuming = bool(args.resume) and Path(args.resume).exists()
+    if not resuming:
+        if not (args.finetune and Path(args.finetune).exists()):
+            raise SystemExit(
+                f"Pretrained checkpoint not found: --finetune={args.finetune!s}\n"
+                f"Pass a valid SHViT checkpoint (e.g. weights/{args.model}.pth) so "
+                f"fine-tuning starts from pretrained weights, not random init."
+            )
         load_pretrained(model, args.finetune)
     model.to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
