@@ -1,4 +1,4 @@
-# CV_Research_Paper_Flowers102
+# CV_Research_Paper_Food101
 
 Here I uploaded all the outputs of all notebooks I ran, so that you can see the expected cell outputs.
 
